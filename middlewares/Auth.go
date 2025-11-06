@@ -1,4 +1,4 @@
-package midddlewares
+package middlewares
 
 import (
 	"NewStudent/auth"

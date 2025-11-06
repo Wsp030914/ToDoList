@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"fmt"
 	"time"
 
 	"NewStudent/config"
@@ -8,7 +9,6 @@ import (
 )
 
 var (
-	// 放到配置里更安全
 	secret    = []byte(config.Secret)
 	issuer    = config.Issuer
 	audience  = config.Audience
@@ -18,31 +18,34 @@ var (
 type Claims struct {
 	UID      int    `json:"uid"`
 	Username string `json:"username"`
+	Ver      int    `json:"ver"` //
 	jwt.RegisteredClaims
 }
 
-// 生成 Access Token
-func GenerateAccessToken(uid int, username string) (string, time.Time, error) {
-	now := time.Now()
+func GenerateAccessToken(uid int, username string, tokenVersion int) (string, time.Time, error) {
+	now := time.Now().UTC()
 	exp := now.Add(accessTTL)
+	jti := fmt.Sprintf("acc_%d_%d", uid, now.UnixNano()) // 或用高熵随机串
 	claims := &Claims{
 		UID:      uid,
 		Username: username,
+		Ver:      tokenVersion, // ← 对应上面的 Claims.Ver
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    issuer,
 			Audience:  []string{audience},
 			Subject:   "access",
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(exp),
-			ID:        "", // 可选 jti
+			ID:        jti,
 		},
 	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
 	signed, err := token.SignedString(secret)
 	return signed, exp, err
 }
 
-// 解析校验
 func Parse(tokenStr string) (*Claims, error) {
 	tok, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(t *jwt.Token) (interface{}, error) {
 		return secret, nil

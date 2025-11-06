@@ -2,9 +2,12 @@ package controllers
 
 import (
 	"NewStudent/auth"
+	"NewStudent/dao"
 	"NewStudent/models"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
+	"time"
 )
 
 type UserController struct{}
@@ -27,12 +30,16 @@ func (U UserController) Login(c *gin.Context) {
 	}
 
 	// ✅ 签发 JWT
-	_, _, err = auth.GenerateAccessToken(user.ID, user.Username)
-	if err != nil {
-		ReturnError(c, 5000, "签发令牌失败")
+	token, exp, er := auth.GenerateAccessToken(user.ID, user.Username, user.TokenVersion)
+	if er != nil {
+		ReturnError(c, 4001, "签发令牌失败")
 		return
 	}
-	ReturnSuccess(c, 0, "登陆成功", username, 1)
+	ReturnSuccess(c, 0, "登陆成功", gin.H{
+		"access_token":      token,
+		"token_type":        "Bearer",
+		"access_expires_at": exp.UTC().Format(time.RFC3339),
+	}, 1)
 }
 
 func (U UserController) Register(c *gin.Context) {
@@ -60,4 +67,29 @@ func (U UserController) Register(c *gin.Context) {
 	}
 	ReturnSuccess(c, 0, "注册成功", username, 1)
 
+}
+
+func (U UserController) Logout(c *gin.Context) {
+	uidAny, ok := c.Get("uid")
+	if !ok {
+		ReturnError(c, 4001, "未授权")
+		return
+	}
+	uid, ok := uidAny.(int)
+	if !ok || uid == 0 {
+		ReturnError(c, 4001, "未授权")
+		return
+	}
+	res := dao.Db.Model(&models.User{}).
+		Where("id = ?", uid).
+		UpdateColumn("token_version", gorm.Expr("token_version + 1"))
+	if res.Error != nil {
+		ReturnError(c, 5000, "登出失败，请稍后重试")
+		return
+	}
+	if res.RowsAffected == 0 {
+		ReturnError(c, 4001, "该用户不存在")
+		return
+	}
+	ReturnSuccess(c, 0, "已退出登录", nil, 1)
 }

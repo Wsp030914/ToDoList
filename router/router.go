@@ -1,26 +1,30 @@
 package router
 
 import (
-	"NewStudent/auth"
 	"NewStudent/controllers"
+	"NewStudent/middlewares"
 	"github.com/gin-gonic/gin"
 )
 
 func Router() *gin.Engine {
 	r := gin.Default()
 
-	// 公开接口：不需要 JWT
 	public := r.Group("/api/v1")
 	{
-		public.POST("/user/login", controllers.UserController{}.Login)
-		public.POST("/user/register", controllers.UserController{}.Register)
+		public.POST("/login", controllers.UserController{}.Login)
+		public.POST("/register", controllers.UserController{}.Register)
+
 	}
 
-	// 受保护接口：需要 JWT
 	protected := r.Group("/api/v1")
-	protected.Use(auth.AuthMiddleware())
+	protected.Use(middlewares.AuthMiddleware())
 	{
-
+		protected.POST("/logout", controllers.UserController{}.Logout)
+		//protected.POST("/user/update", controllers.UserController{}.Update)
+		protected.POST("/projects", controllers.ProjectController{}.Create)
+		protected.GET("/projects", controllers.ProjectController{}.List)
+		protected.GET("/projects/:id", controllers.ProjectController{}.Search)
+		protected.DELETE("/projects/:id", controllers.ProjectController{}.Delete)
 	}
 
 	return r
