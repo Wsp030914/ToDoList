@@ -13,6 +13,7 @@ func Router() *gin.Engine {
 	{
 		public.POST("/login", controllers.UserController{}.Login)
 		public.POST("/register", controllers.UserController{}.Register)
+		public.POST("/update", controllers.UserController{}.Update)
 
 	}
 
@@ -25,6 +26,9 @@ func Router() *gin.Engine {
 		protected.GET("/projects", controllers.ProjectController{}.List)
 		protected.GET("/projects/:id", controllers.ProjectController{}.Search)
 		protected.DELETE("/projects/:id", controllers.ProjectController{}.Delete)
+
+		protected.POST("/tasks", controllers.TaskController{}.Create)
+
 	}
 
 	return r

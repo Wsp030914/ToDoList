@@ -1,12 +1,10 @@
 package main
 
-import (
-	"NewStudent/router"
-)
+import "NewStudent/router"
 
 func main() {
-	//if err := dao.Db.AutoMigrate(&models.User{}); err != nil {
-	//	log.Fatalf("auto migrate user failed: %v", err)
+	//if err := dao.Db.AutoMigrate(&models.Project{}); err != nil {
+	//	log.Fatalf("auto migrate Project failed: %v", err)
 	//}
 	r := router.Router()
 
