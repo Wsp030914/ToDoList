@@ -4,6 +4,8 @@ import (
 	"NewStudent/models"
 	"errors"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -19,6 +21,9 @@ type CreateTaskRequest struct {
 	DueAt     *time.Time `json:"due_at,omitempty"`
 }
 
+func (T TaskController) Delete(c *gin.Context) {
+
+}
 func (T TaskController) Create(c *gin.Context) {
 	uid := c.GetInt("uid")
 
@@ -42,19 +47,21 @@ func (T TaskController) Create(c *gin.Context) {
 	}
 
 	if req.ProjectID != nil {
-		p, err := models.GetProjectByID(uid, req.ProjectID)
+		_, err := models.GetProjectByID(uid, req.ProjectID)
 		if err != nil {
-			ReturnError(c, 4001, err.Error())
-		}
-		if p.ID == 0 {
-			ReturnError(c, 4001, "项目不存在")
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				ReturnError(c, 4001, "项目不存在")
+				return
+			}
+			ReturnError(c, 5001, "请稍后重试："+err.Error())
 			return
 		}
 	}
 
 	exists, err := models.GetTaskByUserProjectTitle(uid, req.ProjectID, req.Title)
 	if err != nil {
-		ReturnError(c, 4001, err.Error())
+		ReturnError(c, 5001, "请稍后重试："+err.Error())
+		return
 	}
 	if exists.ID != 0 {
 		ReturnError(c, 4001, "该任务已存在")
@@ -92,13 +99,74 @@ func (T TaskController) Create(c *gin.Context) {
 			ReturnError(c, 4001, "该任务已存在")
 			return
 		}
-		ReturnError(c, 5000, "创建失败，请稍后重试")
+		ReturnError(c, 5001, "创建失败，请稍后重试")
 		return
 	}
 	ReturnSuccess(c, 0, "创建成功", gin.H{
 		"task": created,
 	}, 1)
 
+}
+
+func (T TaskController) List(c *gin.Context) {
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	size, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	status := c.DefaultQuery("status", "")
+	status = strings.TrimSpace(status)
+	if status != "todo" && status != "doing" && status != "done" && status != "archived" && status != "" {
+		ReturnError(c, 4001, "任务状态错误")
+		return
+	}
+	if page < 1 {
+		page = 1
+	}
+	if size <= 0 || size > 100 {
+		size = 20
+	}
+
+	var pidPtr *int
+	pidStr := strings.TrimSpace(c.Query("project_id"))
+
+	switch {
+	case pidStr == "" || strings.EqualFold(pidStr, "null"):
+		pidPtr = nil
+
+	default:
+		pid, err := strconv.Atoi(pidStr)
+		if err != nil || pid <= 0 {
+			ReturnError(c, 4001, "非法的项目ID")
+			return
+		}
+		pidPtr = &pid
+	}
+
+	uid := c.GetInt("uid")
+	if pidPtr != nil {
+		_, err := models.GetProjectByID(uid, pidPtr)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				ReturnError(c, 4001, "项目不存在")
+				return
+			}
+			ReturnError(c, 5001, "请稍后重试")
+			return
+		}
+	}
+
+	tasks, total, err := models.TaskList(uid, pidPtr, page, size, status)
+
+	if err != nil {
+		ReturnError(c, 5001, "获取任务列表信息出错")
+		return
+	}
+
+	ReturnSuccess(c, 0, "获取成功", gin.H{
+		"list":      tasks,
+		"page":      page,
+		"page_size": size,
+		"total":     total,
+	}, total)
 }
 
 func getString(p *string) string {

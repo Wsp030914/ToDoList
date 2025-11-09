@@ -29,8 +29,8 @@ type UpdateUserReq struct {
 	Username        *string `json:"username,omitempty" binding:"omitempty,min=2,max=64"`
 	Password        *string `json:"password,omitempty"        binding:"omitempty,min=8,max=72"`
 	ConfirmPassword *string `json:"confirm_password,omitempty" binding:"omitempty,eqfield=Password"`
-	OldPassword     *string `json:"old_password,omitempty" binding:"omitempty,eqfield=Password"`
-	AvatarURL       *string `json:"avatar_url,omitempty" binding:"omitempty,url,max=512"`
+	//OldPassword     *string `json:"old_password,omitempty" binding:"omitempty,eqfield=Password"`
+	AvatarURL *string `json:"avatar_url,omitempty" binding:"omitempty,url,max=512"`
 }
 
 func (U UserController) Login(c *gin.Context) {
@@ -146,6 +146,7 @@ func (U UserController) Logout(c *gin.Context) {
 
 func (U UserController) Update(c *gin.Context) {
 	uid := c.GetInt("uid")
+
 	update := map[string]interface{}{}
 	var req UpdateUserReq
 	if err := c.ShouldBindJSON(&req); err != nil {

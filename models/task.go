@@ -49,7 +49,9 @@ var ErrTaskExists = errors.New("任务已存在")
 func GetTaskByUserProjectTitle(uid int, pid *int, title string) (Task, error) {
 	var task Task
 	err := dao.Db.Where("user_id = ? AND project_id <=> ? AND title = ?", uid, pid, title).First(&task).Error
-
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return Task{}, nil
+	}
 	return task, err
 }
 
@@ -70,6 +72,29 @@ func CreateTaskByUidAndTask(uid int, t Task) (Task, error) {
 func GetProjectByID(uid int, pid *int) (Project, error) {
 	var project Project
 	err := dao.Db.Where("user_id = ? AND project_id <=> ?", uid, pid).First(&project).Error
-
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return Project{}, gorm.ErrRecordNotFound
+	}
 	return project, err
+}
+
+func TaskList(uid int, pid *int, page int, size int, status string) ([]Task, int64, error) {
+	var (
+		task  []Task
+		total int64
+		tx    *gorm.DB
+	)
+	tx = dao.Db.Model(&Task{}).Where("user_id = ? And project_id <=> ? And status = ?", uid, pid, status)
+	if status == "" {
+		tx = dao.Db.Where("user_id = ? And project_id <=> ? ", uid, pid)
+	}
+	if err := tx.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err := tx.Order("sort_order DESC, priority DESC").
+		Offset((page - 1) * size).
+		Limit(size).
+		Find(&task).Error
+
+	return task, total, err
 }
