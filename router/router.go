@@ -41,6 +41,12 @@ func Router() *gin.Engine {
 
 		protected.DELETE("/tasks/:id", controllers.TaskController{}.Delete)
 
+		protected.GET("/tasks/:id", controllers.TaskController{}.Search)
+
+		protected.DELETE("/tasks", controllers.TaskController{}.StatusDelete)
+
+		protected.PATCH("/tasks/:id", controllers.TaskController{}.Update)
+
 	}
 
 	return r

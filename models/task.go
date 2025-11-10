@@ -98,3 +98,44 @@ func TaskList(uid int, pid *int, page int, size int, status string) ([]Task, int
 
 	return task, total, err
 }
+
+func DeleteByIDAndProjectIDAndUID(id int, pid *int, uid int) (error, int64) {
+	res := dao.Db.Where("user_id = ? And project_id <=> ? And id = ? ", uid, pid, id).Delete(&Task{})
+	if res.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound, 0
+	}
+	return res.Error, res.RowsAffected
+}
+func GetTaskByIDAndProjectIDAndUID(id int, pid *int, uid int) (Task, error) {
+	var task Task
+	err := dao.Db.Where("user_id = ? And project_id <=> ? And id = ? ", uid, pid, id).First(&task).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return Task{}, nil
+	}
+	return task, err
+}
+
+func DeleteByStatus(uid int, pid *int, status string) (error, int64) {
+	res := dao.Db.Where("user_id = ? And project_id <=> ? And status = ? ", uid, pid, status).Delete(&Task{})
+	if res.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound, 0
+	}
+	return res.Error, res.RowsAffected
+
+}
+
+func UpdateTaskByIDAndAndProjectUID(update map[string]interface{}, id int, pid *int, uid int) (Task, error, int64) {
+	var task Task
+	res := dao.Db.Where("id = ? And project_id <=> ? And user_id = ?", id, pid, uid).Updates(update)
+	if err := res.Error; err != nil {
+		var me *mysql.MySQLError
+		if errors.As(err, &me) && me.Number == 1062 {
+			return Task{}, ErrTaskExists, 0
+		}
+		return Task{}, err, 0
+	}
+	if err := dao.Db.First(&task, "id = ? And project_id <=> ? And user_id = ?", id, pid, uid).Error; err != nil {
+		return task, err, 0
+	}
+	return task, nil, res.RowsAffected
+}

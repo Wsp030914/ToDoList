@@ -31,15 +31,6 @@ func (t *Project) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
-/*func GetProjectInfoByNameAndUserID(name string, userid int) (Project, error) {
-	var project Project
-	err := dao.Db.Where("user_id = ? AND name = ?", userid, name).First(&project).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return Project{}, nil
-	}
-	return project, err
-}*/
-
 func AddProject(project Project) (Project, error) {
 
 	if err := dao.Db.Create(&project).Error; err != nil {

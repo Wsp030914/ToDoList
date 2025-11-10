@@ -17,6 +17,7 @@ func AuthMiddleware() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+
 		tokenStr := strings.TrimSpace(strings.TrimPrefix(authz, "Bearer"))
 		claims, err := auth.Parse(tokenStr)
 		if err != nil {
@@ -24,6 +25,7 @@ func AuthMiddleware() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+
 		var u models.User
 		err = dao.Db.Select("id, token_version").
 			Where("id = ?", claims.UID).
@@ -33,13 +35,13 @@ func AuthMiddleware() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+
 		if claims.Ver != u.TokenVersion {
-			// 版本不一致 → 这张令牌属于旧版本，已被统一失效
 			controllers.ReturnError(c, 4001, "令牌已失效")
 			c.Abort()
 			return
 		}
-		// 注入上下文，业务可用
+
 		c.Set("uid", claims.UID)
 		c.Set("username", claims.Username)
 		c.Next()
