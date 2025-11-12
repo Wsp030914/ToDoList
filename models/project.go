@@ -88,9 +88,6 @@ func DeleteProjectAndTasks(projectID, userID int) (projAffected int64, taskAffec
 func GetProjectInfoByIDAndUserID(id int, userid int) (Project, error) {
 	var project Project
 	err := dao.Db.Where("id = ? And user_id = ?", id, userid).First(&project).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return Project{}, gorm.ErrRecordNotFound
-	}
 	return project, err
 }
 

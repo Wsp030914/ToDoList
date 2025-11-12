@@ -2,13 +2,25 @@ package router
 
 import (
 	"NewStudent/controllers"
+	"NewStudent/log"
 	"NewStudent/middlewares"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 func Router() *gin.Engine {
-	r := gin.Default()
+	cfg, err := log.LoadZapConfig()
+	if err != nil {
+		panic(err)
+	}
+	logger := log.InitZap(cfg)
 
+	defer logger.Sync()
+
+	zap.ReplaceGlobals(logger)
+
+	r := gin.New()
+	r.Use(middlewares.AccessLogMiddleware(), middlewares.RecoveryWithZap())
 	public := r.Group("/api/v1")
 	{
 		public.POST("/login", controllers.UserController{}.Login)

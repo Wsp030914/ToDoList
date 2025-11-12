@@ -9,7 +9,7 @@ var (
 	Secret    = pickSecret()
 	Issuer    = getenv("JWT_ISSUER", "todo-api")
 	Audience  = getenv("JWT_AUDIENCE", "todo-frontend")
-	AccessTTL = mustParseDuration(getenv("JWT_ACCESS_TTL", "15m"))
+	AccessTTL = mustParseDuration(getenv("JWT_ACCESS_TTL", "24h"))
 )
 
 func pickSecret() string {

@@ -1,0 +1,19 @@
+# Zap日志配置
+zap:
+  prefix: ToDoList
+  timeFormat: 2006/01/02 - 15:04:05.00000
+  level: info
+  caller: true
+  stackTrace: true
+  encode: json
+  # 日志输出到哪里 file | console | both
+  writer: file
+  logFile:
+    maxSize: 20
+    backups: 5
+    compress: true
+    output:
+      - "./log/output.log"
+    errput:
+      - "./log/error.log"
+

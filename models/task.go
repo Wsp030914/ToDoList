@@ -14,9 +14,9 @@ type Task struct {
 	ProjectID     *int           `gorm:"index;index:idx_user_proj_sort,priority:2"                                   json:"project_id,omitempty"`
 	Title         string         `gorm:"size:200;not null;uniqueIndex:ux_task_user_proj_title_alive,priority:3" json:"title"`
 	ProjectIDNorm uint64         `gorm:"->;type:BIGINT UNSIGNED GENERATED ALWAYS AS (COALESCE(project_id, 0)) STORED;uniqueIndex:ux_task_user_proj_title_alive,priority:2" json:"-"`
-	ContentMD     string         `gorm:"type:longtext"                         json:"content_md"` // Markdown 正文
+	ContentMD     string         `gorm:"type:longtext"                         json:"content_md"`
 	Status        string         `gorm:"type:enum('todo','doing','done','archived');not null;default:'todo'" json:"status"`
-	Priority      int            `gorm:"type:tinyint;not null;default:3"       json:"priority"` // 1(最高)…5(最低)
+	Priority      int            `gorm:"type:tinyint;not null;default:3"       json:"priority"`
 	SortOrder     int64          `gorm:"not null;default:0;index:idx_user_sort,priority:2;index:idx_user_proj_sort,priority:3" json:"sort_order"`
 	StartAt       *time.Time     `json:"start_at"`
 	DueAt         *time.Time     `json:"due_at"`
@@ -25,9 +25,9 @@ type Task struct {
 	UpdatedAt     time.Time      `json:"updated_at"`
 	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
 	Alive         uint8          `gorm:"->;type:TINYINT(1) GENERATED ALWAYS AS (IF(deleted_at IS NULL,1,0)) STORED;uniqueIndex:ux_task_user_proj_title_alive,priority:4" json:"-"`
-
-	User    User     `gorm:"foreignKey:UserID;references:ID"     json:"-"`
-	Project *Project `gorm:"foreignKey:ProjectID;references:ID"  json:"-"`
+	ContentHtml   string         `gorm:"type:longtext"                         json:"content_html"`
+	User          User           `gorm:"foreignKey:UserID;references:ID"     json:"-"`
+	Project       *Project       `gorm:"foreignKey:ProjectID;references:ID"  json:"-"`
 }
 
 func (t *Task) BeforeCreate(tx *gorm.DB) error {
@@ -69,12 +69,10 @@ func CreateTaskByUidAndTask(uid int, t Task) (Task, error) {
 	return t, nil
 }
 
-func GetProjectByID(uid int, pid *int) (Project, error) {
+func GetProjectByID(uid int, pid int) (Project, error) {
+
 	var project Project
-	err := dao.Db.Where("user_id = ? AND project_id <=> ?", uid, pid).First(&project).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return Project{}, gorm.ErrRecordNotFound
-	}
+	err := dao.Db.Where("user_id = ? AND id = ?", uid, pid).First(&project).Error
 	return project, err
 }
 
@@ -86,7 +84,7 @@ func TaskList(uid int, pid *int, page int, size int, status string) ([]Task, int
 	)
 	tx = dao.Db.Model(&Task{}).Where("user_id = ? And project_id <=> ? And status = ?", uid, pid, status)
 	if status == "" {
-		tx = dao.Db.Where("user_id = ? And project_id <=> ? ", uid, pid)
+		tx = dao.Db.Model(&Task{}).Where("user_id = ? And project_id <=> ? ", uid, pid)
 	}
 	if err := tx.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -106,14 +104,6 @@ func DeleteByIDAndProjectIDAndUID(id int, pid *int, uid int) (error, int64) {
 	}
 	return res.Error, res.RowsAffected
 }
-func GetTaskByIDAndProjectIDAndUID(id int, pid *int, uid int) (Task, error) {
-	var task Task
-	err := dao.Db.Where("user_id = ? And project_id <=> ? And id = ? ", uid, pid, id).First(&task).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return Task{}, nil
-	}
-	return task, err
-}
 
 func DeleteByStatus(uid int, pid *int, status string) (error, int64) {
 	res := dao.Db.Where("user_id = ? And project_id <=> ? And status = ? ", uid, pid, status).Delete(&Task{})
@@ -124,9 +114,18 @@ func DeleteByStatus(uid int, pid *int, status string) (error, int64) {
 
 }
 
-func UpdateTaskByIDAndAndProjectUID(update map[string]interface{}, id int, pid *int, uid int) (Task, error, int64) {
-	var task Task
-	res := dao.Db.Where("id = ? And project_id <=> ? And user_id = ?", id, pid, uid).Updates(update)
+// models/task.go
+
+func GetTaskByIDAndUID(id int, uid int) (Task, error) {
+	var t Task
+	err := dao.Db.Where("id = ? AND user_id = ?", id, uid).First(&t).Error
+
+	return t, err
+}
+
+func UpdateTaskByIDAndUID(update map[string]interface{}, id int, uid int) (Task, error, int64) {
+	var t Task
+	res := dao.Db.Model(&Task{}).Where("id = ? AND user_id = ?", id, uid).Updates(update)
 	if err := res.Error; err != nil {
 		var me *mysql.MySQLError
 		if errors.As(err, &me) && me.Number == 1062 {
@@ -134,8 +133,8 @@ func UpdateTaskByIDAndAndProjectUID(update map[string]interface{}, id int, pid *
 		}
 		return Task{}, err, 0
 	}
-	if err := dao.Db.First(&task, "id = ? And project_id <=> ? And user_id = ?", id, pid, uid).Error; err != nil {
-		return task, err, 0
+	if err := dao.Db.Where("id = ? AND user_id = ?", id, uid).First(&t).Error; err != nil {
+		return t, err, 0
 	}
-	return task, nil, res.RowsAffected
+	return t, nil, res.RowsAffected
 }
