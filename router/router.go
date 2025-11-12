@@ -23,9 +23,9 @@ func Router() *gin.Engine {
 	r.Use(middlewares.AccessLogMiddleware(), middlewares.RecoveryWithZap())
 	public := r.Group("/api/v1")
 	{
-		public.POST("/login", controllers.UserController{}.Login)
+		公共.POST("/login", controllers.UserController{}.Login)
 
-		public.POST("/register", controllers.UserController{}.Register)
+		公共.POST("/register", controllers.UserController{}.Register)
 
 	}
 
@@ -36,7 +36,7 @@ func Router() *gin.Engine {
 
 		protected.POST("/logout", controllers.UserController{}.Logout)
 
-		//protected.POST("/user/update", controllers.UserController{}.Update)
+		
 		protected.POST("/projects", controllers.ProjectController{}.Create)
 
 		protected.GET("/projects", controllers.ProjectController{}.List)
