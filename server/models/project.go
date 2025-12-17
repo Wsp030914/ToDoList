@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
+	"strings"
 	"time"
 )
 
@@ -105,4 +106,25 @@ func UpdateProjectByIDAndUserID(update map[string]interface{}, id int, userid in
 	}
 	return project, nil, res.RowsAffected
 
+}
+
+func GetProjectListByUserIDAndName(UserID int, name string, page, size int) ([]Project, int64, error) {
+	var (
+		items []Project
+		total int64
+	)
+	db := d.Db.Model(&Project{}).Where("user_id = ?", UserID)
+	name = strings.TrimSpace(name)
+	if name != "" {
+		db = db.Where("name LIKE ?", "%"+name+"%")
+	}
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err := db.Order("sort_order DESC, id DESC").
+		Offset((page - 1) * size).
+		Limit(size).
+		Find(&items).Error
+
+	return items, total, err
 }

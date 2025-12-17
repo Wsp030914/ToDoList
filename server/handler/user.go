@@ -24,10 +24,10 @@ type LoginReq struct {
 }
 
 type UpdateUserReq struct {
-	Email           *string `form:"email,omitempty"    binding:"omitempty,email,max=255"`
-	Username        *string `form:"username,omitempty" binding:"omitempty,min=2,max=64"`
-	Password        *string `form:"password,omitempty" binding:"omitempty,min=8,max=72"`
-	ConfirmPassword *string `form:"confirm_password,omitempty" binding:"omitempty,eqfield=Password"`
+	Email           *string `form:"email"    binding:"omitempty,email,max=255"`
+	Username        *string `form:"username" binding:"omitempty,min=2,max=64"`
+	Password        *string `form:"password" binding:"omitempty,min=8,max=72,required_with=ConfirmPassword"`
+	ConfirmPassword *string `form:"confirm_password" binding:"omitempty,required_with=Password,eqfield=Password"`
 }
 
 type UserHandler struct {
@@ -153,7 +153,6 @@ func (u *UserHandler) Update(c *gin.Context) {
 		return
 	}
 
-	// 头像文件（允许不传）
 	var fh *multipart.FileHeader
 	file, err := c.FormFile("file")
 	if err != nil {

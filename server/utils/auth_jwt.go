@@ -29,7 +29,7 @@ func GenerateAccessToken(uid int, username string, tokenVersion int) (string, ti
 	claims := &Claims{
 		UID:      uid,
 		Username: username,
-		Ver:      tokenVersion, // ← 对应上面的 Claims.Ver
+		Ver:      tokenVersion,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    issuer,
 			Audience:  []string{audience},

@@ -31,5 +31,17 @@ func InitAsyncHandlers(d *async.Dispatcher) {
 			AttemptTimeout: 500 * time.Millisecond,
 			MaxRetry:       2,
 		})
+	d.Register("PutAvatar", handlers.UpdateAvatarKey,
+		async.TimeoutPolicy{
+			JobTimeout:     5 * time.Second,
+			AttemptTimeout: 1 * time.Second,
+			MaxRetry:       2,
+		})
+	d.Register("PutProjectSummaryCache", handlers.PutProjectSummary,
+		async.TimeoutPolicy{
+			JobTimeout:     5 * time.Second,
+			AttemptTimeout: 1 * time.Second,
+			MaxRetry:       2,
+		})
 
 }

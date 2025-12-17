@@ -42,7 +42,6 @@ func NewRouter(app *App) *gin.Engine {
 	{
 		public.POST("/login", userCtl.Login)
 		public.POST("/register", userCtl.Register)
-
 	}
 
 	protected := r.Group("/api/v1")

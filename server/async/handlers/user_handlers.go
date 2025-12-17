@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"go.uber.org/zap"
-	"time"
 )
 
 type cosDeletePayload struct {
@@ -37,9 +36,9 @@ func DeleteCosObject(ctx context.Context, job async.Job, lg *zap.Logger) error {
 		lg.Error(job.Type + job.TraceID + "cosKey is nil")
 		return nil
 	}
-	rctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
-	defer cancel()
-	return utils.DeleteObject(rctx, p.Key)
+	err := utils.DeleteObject(ctx, p.Key)
+	service.PutTraceID(ctx, job.Type, job.TraceID, err)
+	return err
 }
 
 func UpdateAvatarKey(ctx context.Context, job async.Job, lg *zap.Logger) error {
@@ -52,10 +51,9 @@ func UpdateAvatarKey(ctx context.Context, job async.Job, lg *zap.Logger) error {
 		lg.Error(job.Type + job.TraceID + "avatarKey is nil or UID <= 0")
 		return nil
 	}
-
-	rctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
-	defer cancel()
-	return service.UpdateAvatarKey(rctx, a.UID, a.AvatarKey)
+	err := service.UpdateAvatarKey(ctx, a.UID, a.AvatarKey)
+	service.PutTraceID(ctx, job.Type, job.TraceID, err)
+	return err
 }
 
 func PutVersion(ctx context.Context, job async.Job, lg *zap.Logger) error {
@@ -72,5 +70,7 @@ func PutVersion(ctx context.Context, job async.Job, lg *zap.Logger) error {
 		lg.Error(job.Type + job.TraceID + "TokenVersion <= 0")
 		return nil
 	}
-	return service.PutVersion(ctx, p.UID, p.TokenVersion)
+	err := service.PutVersion(ctx, p.UID, p.TokenVersion)
+	service.PutTraceID(ctx, job.Type, job.TraceID, err)
+	return err
 }
