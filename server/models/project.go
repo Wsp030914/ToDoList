@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"errors"
 	"github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
@@ -31,9 +32,9 @@ func (t *Project) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
-func AddProject(project Project) (Project, error) {
+func AddProject(ctx context.Context, project Project) (Project, error) {
 
-	if err := d.Db.Create(&project).Error; err != nil {
+	if err := d.Db.WithContext(ctx).Create(&project).Error; err != nil {
 		var me *mysql.MySQLError
 		if errors.As(err, &me) && me.Number == 1062 {
 			return Project{}, ErrProjectExists
@@ -43,12 +44,12 @@ func AddProject(project Project) (Project, error) {
 	return project, nil
 }
 
-func ProjectList(userID int, page, size int) ([]Project, int64, error) {
+func ProjectList(ctx context.Context, userID int, page, size int) ([]Project, int64, error) {
 	var (
 		items []Project
 		total int64
 	)
-	q := d.Db.Model(&Project{}).Where("user_id = ?", userID)
+	q := d.Db.WithContext(ctx).Model(&Project{}).Where("user_id = ?", userID)
 
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -62,8 +63,8 @@ func ProjectList(userID int, page, size int) ([]Project, int64, error) {
 	return items, total, err
 }
 
-func DeleteProjectAndTasks(projectID, userID int) (projAffected int64, taskAffected int64, err error) {
-	err = d.Db.Transaction(func(tx *gorm.DB) error {
+func DeleteProjectAndTasks(ctx context.Context, projectID, userID int) (projAffected int64, taskAffected int64, err error) {
+	err = d.Db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 
 		res := tx.Where("id = ? AND user_id = ?", projectID, userID).Delete(&Project{})
 		if res.Error != nil {
@@ -85,35 +86,34 @@ func DeleteProjectAndTasks(projectID, userID int) (projAffected int64, taskAffec
 	return
 }
 
-func GetProjectInfoByIDAndUserID(id int, userid int) (Project, error) {
+func GetProjectInfoByIDAndUserID(ctx context.Context, id int, userid int) (Project, error) {
 	var project Project
-	err := d.Db.Where("id = ? And user_id = ?", id, userid).First(&project).Error
+	err := d.Db.WithContext(ctx).Where("id = ? And user_id = ?", id, userid).First(&project).Error
 	return project, err
 }
 
-func UpdateProjectByIDAndUserID(update map[string]interface{}, id int, userid int) (Project, error, int64) {
+func UpdateProjectByIDAndUserID(ctx context.Context, update map[string]interface{}, id int, userid int) (Project, int64, error) {
 	var project Project
-	res := d.Db.Where("id = ? And user_id = ?", id, userid).Updates(update)
+	res := d.Db.WithContext(ctx).Model(&Project{}).Where("id = ? And user_id = ?", id, userid).Updates(update)
 	if err := res.Error; err != nil {
 		var me *mysql.MySQLError
 		if errors.As(err, &me) && me.Number == 1062 {
-			return Project{}, ErrProjectExists, 0
+			return Project{}, 0, ErrProjectExists
 		}
-		return Project{}, err, 0
+		return Project{}, 0, err
 	}
-	if err := d.Db.First(&project, "id = ? And user_id = ?", id, userid).Error; err != nil {
-		return project, err, 0
+	if err := d.Db.WithContext(ctx).First(&project, "id = ? And user_id = ?", id, userid).Error; err != nil {
+		return project, 0, err
 	}
-	return project, nil, res.RowsAffected
-
+	return project, res.RowsAffected, nil
 }
 
-func GetProjectListByUserIDAndName(UserID int, name string, page, size int) ([]Project, int64, error) {
+func GetProjectListByUserIDAndName(ctx context.Context, UserID int, name string, page, size int) ([]Project, int64, error) {
 	var (
 		items []Project
 		total int64
 	)
-	db := d.Db.Model(&Project{}).Where("user_id = ?", UserID)
+	db := d.Db.WithContext(ctx).Model(&Project{}).Where("user_id = ?", UserID)
 	name = strings.TrimSpace(name)
 	if name != "" {
 		db = db.Where("name LIKE ?", "%"+name+"%")

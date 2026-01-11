@@ -1,7 +1,6 @@
 package service
 
 import (
-	"ToDoList/server/models"
 	"context"
 	"encoding/json"
 	"errors"
@@ -33,12 +32,7 @@ func projectsListKey(uid int, ver int64, name string, page, size int) string {
 	return fmt.Sprintf("u:%d:projects:list:v%d:n%016x:p%d:s%d", uid, ver, h.Sum64(), page, size)
 }
 
-//PutProjectFile Redis缓存项目详情
-func PutProjectFile(ctx context.Context, uID int, id int, project models.Project) {
-
-}
-
-func GetProjectSummaryCache(ctx context.Context, uid int, name string, page, size int, ver int64) ([]ProjectSummary, int64, error) {
+func GetProjectsSummaryCache(ctx context.Context, uid int, name string, page, size int, ver int64) ([]ProjectSummary, int64, error) {
 	key := projectsListKey(uid, ver, name, page, size)
 	b, err := c.Rdb.Get(ctx, key).Bytes()
 	if err != nil {
@@ -53,7 +47,7 @@ func GetProjectSummaryCache(ctx context.Context, uid int, name string, page, siz
 	return cached.Items, cached.Total, nil
 }
 
-func PutProjectSummaryCache(ctx context.Context, uid int, name string, page, size int, total int64, ps []ProjectSummary, ver int64) error {
+func PutProjectsSummaryCache(ctx context.Context, uid int, name string, page, size int, total int64, ps []ProjectSummary, ver int64) error {
 	key := projectsListKey(uid, ver, name, page, size)
 	val, err := json.Marshal(ProjectListCache{Items: ps, Total: total})
 	if err != nil {
@@ -62,10 +56,11 @@ func PutProjectSummaryCache(ctx context.Context, uid int, name string, page, siz
 	return c.Rdb.Set(ctx, key, val, 30*time.Second).Err()
 }
 
-func GetProjectVer(ctx context.Context, uID int) int64 {
+func GetProjectsVer(ctx context.Context, uID int) int64 {
 	key := fmt.Sprintf("u:%d:projects:ver", uID)
 	v, err := c.Rdb.Get(ctx, key).Int64()
 	if errors.Is(err, redis.Nil) || err != nil || v < 1 {
+		_ = c.Rdb.SetNX(ctx, key, 1, 0).Err()
 		return 1
 	}
 	return v
@@ -76,10 +71,13 @@ func ShouldBypassProjectsCache(ctx context.Context, uid int) bool {
 	return err == nil && n == 1
 }
 
-func IncrProjectsVer(ctx context.Context, rdb *redis.Client, uid int) {
-	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+func IncrProjectsVer(ctx context.Context, rdb *redis.Client, uid int) error {
+	ctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
 	defer cancel()
-	if err := c.Rdb.Incr(ctx, projectsVerKey(uid)).Err(); err != nil {
-		_ = c.Rdb.Set(ctx, projectsNoCacheKey(uid), 1, 5*time.Second).Err()
+
+	if err := rdb.Incr(ctx, projectsVerKey(uid)).Err(); err != nil {
+		_ = rdb.Set(ctx, projectsNoCacheKey(uid), 1, 5*time.Second).Err()
+		return err
 	}
+	return nil
 }

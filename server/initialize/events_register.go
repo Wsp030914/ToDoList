@@ -37,7 +37,7 @@ func InitAsyncHandlers(d *async.Dispatcher) {
 			AttemptTimeout: 1 * time.Second,
 			MaxRetry:       2,
 		})
-	d.Register("PutProjectSummaryCache", handlers.PutProjectSummary,
+	d.Register("PutProjectsSummaryCache", handlers.PutProjectsSummary,
 		async.TimeoutPolicy{
 			JobTimeout:     5 * time.Second,
 			AttemptTimeout: 1 * time.Second,

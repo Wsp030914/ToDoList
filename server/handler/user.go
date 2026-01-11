@@ -54,7 +54,7 @@ func (u *UserHandler) Login(c *gin.Context) {
 		if errors.As(err, &ae) {
 			utils.ReturnError(c, ae.Code, ae.Message)
 		} else {
-			utils.ReturnError(c, 4001, "系统错误")
+			utils.ReturnError(c, 5001, "系统错误")
 		}
 		return
 	}
@@ -89,7 +89,7 @@ func (u *UserHandler) Register(c *gin.Context) {
 		if errors.As(err, &ae) {
 			utils.ReturnError(c, ae.Code, ae.Message)
 		} else {
-			utils.ReturnError(c, 4001, "系统错误")
+			utils.ReturnError(c, 5001, "系统错误")
 		}
 		return
 	}
@@ -132,7 +132,7 @@ func (u *UserHandler) Logout(c *gin.Context) {
 		if errors.As(err, &ae) {
 			utils.ReturnError(c, ae.Code, ae.Message)
 		} else {
-			utils.ReturnError(c, 4001, "系统错误")
+			utils.ReturnError(c, 5001, "系统错误")
 		}
 		return
 	}
@@ -180,18 +180,14 @@ func (u *UserHandler) Update(c *gin.Context) {
 		if errors.As(err, &ae) {
 			utils.ReturnError(c, ae.Code, ae.Message)
 		} else {
-			utils.ReturnError(c, 4001, "系统错误")
+			utils.ReturnError(c, 5001, "系统错误")
 		}
 		return
 	}
-
-	// affected == 0 的情况，在 service 里已经按 success 处理
 	if res.Token == nil {
 		utils.ReturnSuccess(c, 0, "更新成功", res.User, res.Affected)
 		return
 	}
-
-	// 修改密码，需要带新 token
 	utils.ReturnSuccess(c, 0, "信息已更新", gin.H{
 		"access_token":      res.Token.AccessToken,
 		"token_type":        "Bearer",

@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"errors"
 	"github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
@@ -26,27 +27,27 @@ type User struct {
 	Alive        uint8  `gorm:"->;type:TINYINT(1) GENERATED ALWAYS AS (IF(deleted_at IS NULL,1,0)) STORED;uniqueIndex:ux_user_username_alive,priority:2;uniqueIndex:ux_user_email_alive,priority:2" json:"-"`
 }
 
-func GetUserInfoByUsername(username string) (User, error) {
+func GetUserInfoByUsername(ctx context.Context, username string) (User, error) {
 	var user User
-	err := d.Db.Where("username = ?", username).First(&user).Error
+	err := d.Db.WithContext(ctx).Where("username = ?", username).First(&user).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return User{}, nil
 	}
 	return user, err
 }
 
-func GetUserInfoByID(UID int) (User, error) {
+func GetUserInfoByID(ctx context.Context, UID int) (User, error) {
 	var user User
-	err := d.Db.Where("ID = ?", UID).First(&user).Error
+	err := d.Db.WithContext(ctx).Where("ID = ?", UID).First(&user).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return User{}, nil
 	}
 	return user, err
 }
 
-func AddUser(user User) (User, error) {
+func AddUser(ctx context.Context, user User) (User, error) {
 
-	if err := d.Db.Create(&user).Error; err != nil {
+	if err := d.Db.WithContext(ctx).Create(&user).Error; err != nil {
 		var me *mysql.MySQLError
 		if errors.As(err, &me) && me.Number == 1062 {
 			return User{}, ErrUserExists
@@ -56,27 +57,27 @@ func AddUser(user User) (User, error) {
 	return user, nil
 }
 
-func GetVersionByID(uid int) (User, error) {
+func GetVersionByID(ctx context.Context, uid int) (User, error) {
 	var u User
-	err := d.Db.Select("id, token_version").
+	err := d.Db.WithContext(ctx).Select("id, token_version").
 		Where("id = ?", uid).
 		First(&u).Error
 
 	return u, err
 }
 
-func GetUserInfoByEmail(email string) (User, error) {
+func GetUserInfoByEmail(ctx context.Context, email string) (User, error) {
 	var user User
-	err := d.Db.Where("email = ?", email).First(&user).Error
+	err := d.Db.WithContext(ctx).Where("email = ?", email).First(&user).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return User{}, nil
 	}
 	return user, err
 }
 
-func UpdateUser(update map[string]interface{}, uid int) (User, error, int64) {
+func UpdateUser(ctx context.Context, update map[string]interface{}, uid int) (User, error, int64) {
 	var user User
-	res := d.Db.Model(&User{}).Where("id = ? ", uid).Updates(update)
+	res := d.Db.WithContext(ctx).Model(&User{}).Where("id = ? ", uid).Updates(update)
 	if err := res.Error; err != nil {
 		var me *mysql.MySQLError
 		if errors.As(err, &me) && me.Number == 1062 {
@@ -84,7 +85,7 @@ func UpdateUser(update map[string]interface{}, uid int) (User, error, int64) {
 		}
 		return User{}, err, 0
 	}
-	if err := d.Db.First(&user, "id = ?", uid).Error; err != nil {
+	if err := d.Db.WithContext(ctx).First(&user, "id = ?", uid).Error; err != nil {
 		return user, err, 0
 	}
 	return user, nil, res.RowsAffected

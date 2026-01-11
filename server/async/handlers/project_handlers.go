@@ -18,14 +18,14 @@ type GetProjectSummaryPayload struct {
 	Size  int                      `json:"size"`
 }
 
-func PutProjectSummary(ctx context.Context, job async.Job, lg *zap.Logger) error {
+func PutProjectsSummary(ctx context.Context, job async.Job, lg *zap.Logger) error {
 	var g GetProjectSummaryPayload
 	if err := json.Unmarshal(job.Payload, &g); err != nil {
 		lg.Error(job.Type + job.TraceID + "Payload Unmarshal is err")
 		return nil
 	}
 
-	err := service.PutProjectSummaryCache(ctx, g.UID, g.Name, g.Page, g.Size, g.Total, g.Items, g.Ver)
+	err := service.PutProjectsSummaryCache(ctx, g.UID, g.Name, g.Page, g.Size, g.Total, g.Items, g.Ver)
 	service.PutTraceID(ctx, job.Type, job.TraceID, err)
 	return err
 }

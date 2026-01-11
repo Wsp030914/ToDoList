@@ -40,7 +40,7 @@ func (s *UserService) Login(ctx context.Context, lg *zap.Logger, username, passw
 	lg = lg.With(zap.String("username", username))
 	lg.Info("login.begin")
 
-	user, err := models.GetUserInfoByUsername(username)
+	user, err := models.GetUserInfoByUsername(ctx, username)
 	if err != nil {
 		lg.Error("login.query_user_failed", zap.Error(err))
 		return nil, &AppError{Code: 4001, Message: "请稍后重试"}
@@ -78,7 +78,7 @@ func (s *UserService) Register(ctx context.Context, lg *zap.Logger, email, usern
 	lg = lg.With(zap.String("username", username), zap.String("email", email))
 	lg.Info("register.begin")
 
-	exists, err := models.GetUserInfoByUsername(username)
+	exists, err := models.GetUserInfoByUsername(ctx, username)
 	if err != nil {
 		lg.Error("register.check_username_failed", zap.Error(err))
 		return nil, &AppError{Code: 4001, Message: "请稍后再试：" + err.Error()}
@@ -88,7 +88,7 @@ func (s *UserService) Register(ctx context.Context, lg *zap.Logger, email, usern
 		return nil, &AppError{Code: 4001, Message: "用户已存在"}
 	}
 
-	exists, err = models.GetUserInfoByEmail(email)
+	exists, err = models.GetUserInfoByEmail(ctx, email)
 	if err != nil {
 		lg.Error("register.check_email_failed", zap.Error(err))
 		return nil, &AppError{Code: 4001, Message: "请稍后再试：" + err.Error()}
@@ -122,7 +122,7 @@ func (s *UserService) Register(ctx context.Context, lg *zap.Logger, email, usern
 		AvatarURL: avatarKey,
 	}
 
-	created, err := models.AddUser(u)
+	created, err := models.AddUser(ctx, u)
 	if err != nil {
 		if errors.Is(err, models.ErrUserExists) {
 			lg.Info("register.duplicate_on_insert")
@@ -179,20 +179,20 @@ type TokenInfo struct {
 	AccessToken    string
 	AccessExpireAt time.Time
 }
-type UpdateResult struct {
+type UpdateUserResult struct {
 	User     models.User
 	Affected int64
 	Token    *TokenInfo
 }
 
 // UpdateUser 更新用户信息
-func (s *UserService) UpdateUser(ctx context.Context, lg *zap.Logger, uid int, in UpdateUserInput) (*UpdateResult, error) {
+func (s *UserService) UpdateUser(ctx context.Context, lg *zap.Logger, uid int, in UpdateUserInput) (*UpdateUserResult, error) {
 
 	update := map[string]interface{}{}
 
 	if in.Username != nil && strings.TrimSpace(*in.Username) != "" {
 		username := strings.TrimSpace(*in.Username)
-		exists, err := models.GetUserInfoByUsername(username)
+		exists, err := models.GetUserInfoByUsername(ctx, username)
 		if err != nil {
 			lg.Error("user.update.check_username_failed", zap.Error(err))
 			return nil, &AppError{Code: 4001, Message: "请稍后再试：" + err.Error()}
@@ -206,7 +206,7 @@ func (s *UserService) UpdateUser(ctx context.Context, lg *zap.Logger, uid int, i
 
 	if in.Email != nil && strings.TrimSpace(*in.Email) != "" {
 		email := strings.ToLower(strings.TrimSpace(*in.Email))
-		exists, err := models.GetUserInfoByEmail(email)
+		exists, err := models.GetUserInfoByEmail(ctx, email)
 		if err != nil {
 			lg.Error("user.update.check_email_failed", zap.Error(err))
 			return nil, &AppError{Code: 4001, Message: "请稍后再试：" + err.Error()}
@@ -221,7 +221,7 @@ func (s *UserService) UpdateUser(ctx context.Context, lg *zap.Logger, uid int, i
 	oldKey := ""
 	newKey := ""
 	if in.AvatarFile != nil {
-		oldUser, err := models.GetUserInfoByID(uid)
+		oldUser, err := models.GetUserInfoByID(ctx, uid)
 		if err != nil {
 			lg.Error("user.update.get_old_avatar_failed", zap.Error(err))
 			return nil, &AppError{Code: 4001, Message: "请稍后再试：" + err.Error()}
@@ -259,7 +259,7 @@ func (s *UserService) UpdateUser(ctx context.Context, lg *zap.Logger, uid int, i
 		return nil, &AppError{Code: 4001, Message: "没有需要更新的字段"}
 	}
 
-	updated, err, affected := models.UpdateUser(update, uid)
+	updated, err, affected := models.UpdateUser(ctx, update, uid)
 	if err != nil {
 		if newKey != "" && s.bus != nil {
 			infra.Publish(s.bus, lg, "DeleteCOS", struct {
@@ -294,7 +294,7 @@ func (s *UserService) UpdateUser(ctx context.Context, lg *zap.Logger, uid int, i
 	}
 	if affected == 0 {
 		lg.Info("user.update.noop")
-		return &UpdateResult{
+		return &UpdateUserResult{
 			User:     updated,
 			Affected: affected,
 			Token:    nil,
@@ -303,7 +303,7 @@ func (s *UserService) UpdateUser(ctx context.Context, lg *zap.Logger, uid int, i
 	// 不需要刷新 token
 	if _, ok := update["token_version"]; !ok {
 		lg.Info("user.update.success", zap.Int64("affected", affected))
-		return &UpdateResult{
+		return &UpdateUserResult{
 			User:     updated,
 			Affected: affected,
 			Token:    nil,
@@ -319,7 +319,7 @@ func (s *UserService) UpdateUser(ctx context.Context, lg *zap.Logger, uid int, i
 
 	tokenStr, exp, _ := utils.GenerateAccessToken(updated.ID, updated.Username, updated.TokenVersion)
 	lg.Info("user.update.password_changed", zap.Time("new_access_exp", exp))
-	return &UpdateResult{
+	return &UpdateUserResult{
 		User:     updated,
 		Affected: affected,
 		Token: &TokenInfo{

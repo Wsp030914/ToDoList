@@ -96,7 +96,11 @@ func (d *Dispatcher) worker(id int) {
 		case <-d.ctx.Done():
 			lg.Error("[Worker]" + strconv.Itoa(id) + "exit")
 			return
-		case j := <-d.jobs:
+		case j, ok := <-d.jobs:
+			if !ok {
+				lg.Info("[Worker]" + strconv.Itoa(id) + " jobs closed, exit")
+				return
+			}
 			ctx, cancel := context.WithTimeout(d.ctx, d.Policy[j.Type].JobTimeout)
 			err := d.safeHandle(ctx, j, id)
 			cancel()
