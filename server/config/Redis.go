@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/spf13/viper"
 )
 
@@ -14,7 +16,13 @@ type RedisConfig struct {
 
 func LoadRedisConfig() (*RedisConfig, error) {
 	v := viper.New()
-	v.SetConfigFile("D:\\GoStudy\\ToDoList\\server\\config.yml")
+	v.SetConfigName("config")
+	v.SetConfigType("yml")
+	v.AddConfigPath(".")
+	v.AddConfigPath("./server")
+	if p := os.Getenv("TODO_CONFIG_FILE"); p != "" {
+		v.SetConfigFile(p)
+	}
 	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("read config failed: %w", err)
 	}

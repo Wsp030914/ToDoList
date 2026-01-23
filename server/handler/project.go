@@ -20,7 +20,7 @@ func NewProjectHandler(svc *service.ProjectService) *ProjectHandler {
 
 type CreateReq struct {
 	Name  string  `json:"name"  binding:"required,min=1,max=128"`
-	Color *string `json:"color" binding:"omitempty,max=16"`
+	Color *string `json:"color" binding:"omitempty"`
 }
 
 type UpdateReq struct {
@@ -98,7 +98,6 @@ func (p *ProjectHandler) Create(c *gin.Context) {
 		utils.ReturnError(c, 4001, "项目名称不可全空")
 		return
 	}
-
 	res, err := p.svc.CreateProject(c.Request.Context(), lg, uid, name, req.Color)
 	if err != nil {
 		var ae *service.AppError

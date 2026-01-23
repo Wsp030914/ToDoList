@@ -6,6 +6,8 @@ import (
 	"ToDoList/server/handler"
 	"ToDoList/server/middlewares"
 	"ToDoList/server/service"
+	"context"
+
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -19,7 +21,7 @@ type App struct {
 	Db  *gorm.DB
 }
 
-func NewRouter(app *App) *gin.Engine {
+func NewRouter(ctx context.Context, app *App) *gin.Engine {
 	cfg, err := config.LoadZapConfig()
 	if err != nil {
 		panic(err)
@@ -32,11 +34,16 @@ func NewRouter(app *App) *gin.Engine {
 
 	r := gin.New()
 	r.Use(middlewares.AccessLogMiddleware(), middlewares.RecoveryWithZap())
+	r.Use(middlewares.RateLimitMiddleware(5, 10))
+	r.Use(middlewares.CORSMiddleware())
+	
 
 	userSvc := service.NewUserService(app.Bus)
 	userCtl := handler.NewUserHandler(userSvc)
 	projectSvc := service.NewProjectService(app.Bus)
 	projectCtl := handler.NewProjectHandler(projectSvc)
+	taskSvc := service.NewTaskService(app.Bus)
+	taskCtl := handler.NewTaskHandler(taskSvc)
 	authSvc := service.NewAuthService(app.Bus)
 	public := r.Group("/api/v1")
 	{
@@ -49,10 +56,19 @@ func NewRouter(app *App) *gin.Engine {
 	{
 		protected.PATCH("/users/me", userCtl.Update)
 		protected.POST("/logout", userCtl.Logout)
-
 		protected.GET("/projects/:id", projectCtl.GetProjectByID)
 		protected.GET("/projects", projectCtl.Search)
-	}
+		protected.POST("/projects", projectCtl.Create)
+		protected.PATCH("/projects/:id", projectCtl.Update)
+		protected.DELETE("/projects/:id", projectCtl.Delete)
 
+		protected.POST("/tasks", taskCtl.Create)
+		protected.PATCH("/projects/:pid/tasks/:id", taskCtl.Update)
+		protected.DELETE("/tasks/:id", taskCtl.Delete)
+		protected.GET("/projects/:pid/tasks/:id", taskCtl.Search)
+		protected.GET("/tasks", taskCtl.List)
+		
+	}
+	taskSvc.StartDueWatcher(ctx, logger)
 	return r
 }

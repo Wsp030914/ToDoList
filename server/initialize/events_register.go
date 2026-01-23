@@ -6,10 +6,6 @@ import (
 	"time"
 )
 
-/*
-DeleteCOS
-AvatarUpdated
-*/
 
 func InitAsyncHandlers(d *async.Dispatcher) {
 	d.Register("DeleteCOS", handlers.DeleteCosObject,

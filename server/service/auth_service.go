@@ -44,7 +44,7 @@ func (a *AuthService) ValidateVersion(ctx context.Context, lg *zap.Logger, uid i
 		}
 	}
 
-	u, dbErr := models.GetVersionByID(uid)
+	u, dbErr := models.GetVersionByID(ctx, uid)
 	if dbErr != nil {
 		if errors.Is(dbErr, gorm.ErrRecordNotFound) {
 			return &AppError{Code: 4001, Message: "该用户不存在"}

@@ -15,7 +15,8 @@ import (
 )
 
 func main() {
-	// 1) 初始化外部依赖
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+    defer stop()
 	utils.InitCos()
 	if err := initialize.InitMySQL(); err != nil {
 		panic(err)
@@ -32,7 +33,7 @@ func main() {
 
 	initialize.InitAsyncHandlers(dispatcher)
 	app := &App{Bus: bus, Rdb: initialize.Rdb, Db: initialize.Db}
-	r := NewRouter(app)
+	r := NewRouter(ctx, app)
 
 	srv := &http.Server{
 		Addr:    ":8080",
@@ -44,11 +45,9 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
-
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
+	
+	<-ctx.Done()
 	dispatcher.Stop()
+
 	_ = srv.Shutdown(context.Background())
 }

@@ -13,16 +13,12 @@ var ErrProjectExists = errors.New("项目已存在")
 
 type Project struct {
 	ID        int            `gorm:"primaryKey"                               json:"id"`
-	UserID    int            `gorm:"index;not null;uniqueIndex:ux_user_name_alive,priority:1" json:"user_id"`
-	Name      string         `gorm:"size:128;not null;uniqueIndex:ux_user_name_alive,priority:2" json:"name"`
-	Color     string         `gorm:"size:16"                                   json:"color,omitempty"`
+	UserID    int            `gorm:"index;not null;uniqueIndex:ux_user_name,priority:1" json:"user_id"`
+	Name      string         `gorm:"size:128;not null;uniqueIndex:ux_user_name,priority:2" json:"name"`
+	Color string `gorm:"size:16;not null;default:'#9b6d6d'" json:"color"`
 	SortOrder int64          `gorm:"not null;default:0"                        json:"sort_order"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index"                                     json:"-"`
-	Alive     uint8          `gorm:"->;type:TINYINT(1) GENERATED ALWAYS AS (IF(deleted_at IS NULL,1,0)) STORED;uniqueIndex:ux_user_name_alive,priority:3" json:"-"`
-
-	User User `gorm:"foreignKey:UserID;references:ID" json:"-"`
 }
 
 func (t *Project) BeforeCreate(tx *gorm.DB) error {
@@ -66,21 +62,20 @@ func ProjectList(ctx context.Context, userID int, page, size int) ([]Project, in
 func DeleteProjectAndTasks(ctx context.Context, projectID, userID int) (projAffected int64, taskAffected int64, err error) {
 	err = d.Db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 
-		res := tx.Where("id = ? AND user_id = ?", projectID, userID).Delete(&Project{})
-		if res.Error != nil {
-			return res.Error
+		resTask := tx.Where("user_id = ? AND project_id = ?", userID, projectID).Delete(&Task{})
+		if resTask.Error != nil {
+			return resTask.Error
 		}
-		if res.RowsAffected == 0 {
+		taskAffected = resTask.RowsAffected
+
+		resProj := tx.Where("id = ? AND user_id = ?", projectID, userID).Delete(&Project{})
+		if resProj.Error != nil {
+			return resProj.Error
+		}
+		if resProj.RowsAffected == 0 {
 			return gorm.ErrRecordNotFound
 		}
-		projAffected = res.RowsAffected
-
-		res2 := tx.Where("user_id = ? AND project_id = ?", userID, projectID).Delete(&Task{})
-		if res2.Error != nil {
-			return res2.Error
-		}
-		taskAffected = res2.RowsAffected
-
+		projAffected = resProj.RowsAffected
 		return nil
 	})
 	return

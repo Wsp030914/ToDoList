@@ -6,12 +6,20 @@ import (
 	"ToDoList/server/models"
 	"context"
 	"errors"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
+
+var (
+    ErrInvalidColor = errors.New("invalid color") 
+    hexColorRe      = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
+)
+
 
 type ProjectProfile struct {
 	ID        int       `json:"id"`
@@ -116,16 +124,21 @@ func (p *ProjectService) GetProjectListByName(ctx context.Context, lg *zap.Logge
 }
 
 
-type CreateResult struct {
+type CreatePeojectResult struct {
 	Project models.Project
 }
 
-func (p *ProjectService) CreateProject(ctx context.Context, lg *zap.Logger, uid int, name string, color *string) (*CreateResult, error) {
+func (p *ProjectService) CreateProject(ctx context.Context, lg *zap.Logger, uid int, name string, color *string) (*CreatePeojectResult, error) {
 	lg = lg.With(zap.Int("uid", uid), zap.String("name", name))
 	lg.Info("project.CreateProject.begin")
 	var project models.Project
 	if color != nil {
-		cl := strings.TrimSpace(*color)
+		err := validateColorIfProvided(color)
+		if err != nil{
+			lg.Info("CreateProject.Color_is_Error")
+			return nil, &AppError{Code: 4001, Message: "项目颜色格式出错"}
+		}
+		cl := *color
 		project = models.Project{Name: name, UserID: uid, Color: cl}
 	} else {
 		project = models.Project{Name: name, UserID: uid}
@@ -145,7 +158,7 @@ func (p *ProjectService) CreateProject(ctx context.Context, lg *zap.Logger, uid 
 	}
 
 	lg.Info("project.CreateProject.success", zap.Int("project_id", created.ID))
-	return &CreateResult{
+	return &CreatePeojectResult{
 		Project: created,
 	}, nil
 }
@@ -167,7 +180,12 @@ func (p *ProjectService) UpdateProject(ctx context.Context, lg *zap.Logger, pid 
 		update["name"] = name
 	}
 	if in.Color != nil {
-		Color := strings.TrimSpace(*in.Color)
+		err := validateColorIfProvided(in.Color)
+		if err != nil{
+			lg.Info("CreateProject.Color_is_Error")
+			return nil, &AppError{Code: 4001, Message: "项目颜色格式出错"}
+		}
+		Color := *(in.Color)
 		update["color"] = Color
 	}
 	if in.SortOrder != nil {
@@ -227,14 +245,31 @@ func (p *ProjectService) DeleteProject(ctx context.Context, lg *zap.Logger, pid 
 		lg.Error("delete project failed", zap.Error(err))
 		return nil, &AppError{Code: 5001, Message: "删除失败"}
 	}
+	IncrProjectsVer(ctx, c.Rdb, uid)
 	lg.Info("project.delete.ok",
 		zap.Int("project_id", pid),
 		zap.Int64("proj_affected", affected),
 		zap.Int64("task_affected", taskAffected),
 	)
-
+	err = DelTaskSummaryCache(ctx, uid, pid, "all")
+	if err != nil {
+		lg.Warn("redis.deleteProject.task_summary_failed", zap.Error(err), zap.Int("pid", pid))
+	}
 	return &DeleteProjectResult{
 		Affected:     affected,
 		TaskAffected: taskAffected,
 	}, nil
+}
+
+func validateColorIfProvided(color *string) error {
+    s := strings.TrimSpace(*color)
+	if s == ""{
+		*color = "#9b6d6d"
+		return nil
+	}
+    if !hexColorRe.MatchString(s) {
+        return ErrInvalidColor
+    }
+    *color = strings.ToUpper(s)
+    return nil
 }

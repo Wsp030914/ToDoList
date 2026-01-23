@@ -71,7 +71,7 @@ type RegisterResult struct {
 	User models.User
 }
 
-func (s *UserService) Register(ctx context.Context, lg *zap.Logger, email, username, password string, avatarFile *multipart.FileHeader, ) (*RegisterResult, error) {
+func (s *UserService) Register(ctx context.Context, lg *zap.Logger, email, username, password string, avatarFile *multipart.FileHeader) (*RegisterResult, error) {
 
 	username = strings.TrimSpace(username)
 	email = strings.ToLower(strings.TrimSpace(email))
@@ -103,7 +103,7 @@ func (s *UserService) Register(ctx context.Context, lg *zap.Logger, email, usern
 		lg.Error("register.password_hash_failed", zap.Error(err))
 		return nil, &AppError{Code: 4001, Message: "密码处理失败"}
 	}
-	//COS云存储头像
+	
 	if avatarFile == nil {
 		lg.Error("register.avatar_missing")
 		return nil, &AppError{Code: 4001, Message: "头像上传失败"}

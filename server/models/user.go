@@ -12,19 +12,15 @@ var ErrUserExists = errors.New("用户已存在")
 
 type User struct {
 	ID           int            `gorm:"primaryKey"                 json:"id"`
-	Email        string         `gorm:"size:255;not null;"                  json:"email"`
+	Email        string         `gorm:"size:255;not null;uniqueIndex"                  json:"email"`
 	Password     string         `gorm:"size:255;not null"          json:"-"`
-	Username     string         `gorm:"size:64;not null;"           json:"username"`
+	Username     string         `gorm:"size:64;not null;uniqueIndex"           json:"username"`
 	AvatarURL    string         `gorm:"size:512"                   json:"avatar_url"`
 	Timezone     string         `gorm:"size:64;default:Asia/Shanghai" json:"timezone"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
-	DeletedAt    gorm.DeletedAt `gorm:"index"                      json:"-"`
 	TokenVersion int            `gorm:"not null;default:1"  json:"-"`
 
-	UsernameNorm string `gorm:"->;type:VARCHAR(64)  GENERATED ALWAYS AS (LOWER(username)) STORED;uniqueIndex:ux_user_username_alive,priority:1" json:"-"`
-	EmailNorm    string `gorm:"->;type:VARCHAR(255) GENERATED ALWAYS AS (LOWER(email))    STORED;uniqueIndex:ux_user_email_alive,priority:1" json:"-"`
-	Alive        uint8  `gorm:"->;type:TINYINT(1) GENERATED ALWAYS AS (IF(deleted_at IS NULL,1,0)) STORED;uniqueIndex:ux_user_username_alive,priority:2;uniqueIndex:ux_user_email_alive,priority:2" json:"-"`
 }
 
 func GetUserInfoByUsername(ctx context.Context, username string) (User, error) {

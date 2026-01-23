@@ -13,7 +13,7 @@ func AccessLogMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 
-		reqID := c.GetString("X-Request-ID")
+		reqID := c.GetHeader("X-Request-ID")
 		if reqID == "" {
 			reqID = uuid.NewString()
 		}

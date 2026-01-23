@@ -36,7 +36,7 @@ func GetProjectsSummaryCache(ctx context.Context, uid int, name string, page, si
 	key := projectsListKey(uid, ver, name, page, size)
 	b, err := c.Rdb.Get(ctx, key).Bytes()
 	if err != nil {
-		return nil, 0, err // miss: redis.Nil
+		return nil, 0, err 
 	}
 
 	var cached ProjectListCache
