@@ -6,12 +6,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 const (
-    ErrCodeOK              = 0     
-    ErrCodeAuthFailed      = 4001  
-    ErrCodeValidation      = 4002  
-    ErrCodeNotFound        = 4004  
-    ErrCodeConflict        = 4009  
-    ErrCodeInternalServer  = 5001  
+    CodeOK              = 0     
+    ErrCodeAuthFailed      = 4001  //认证失败（无效的JWT/未登录）
+    ErrCodeValidation      = 4002  //参数验证失败（email格式错、密码过短等）
+    ErrCodeNotFound        = 4004  //资源未找到（用户不存在、项目不存在）
+    ErrCodeConflict        = 4009  //冲突（邮箱已被注册、用户名已存在）
+    ErrCodeInternalServer  = 5001  //服务器内部错误（数据库异常、系统错误）
 )
 type JsonStruct struct {
 	Code  int         `json:"code"`

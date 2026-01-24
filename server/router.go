@@ -9,6 +9,8 @@ import (
 	"context"
 
 	"github.com/redis/go-redis/v9"
+	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
@@ -63,12 +65,13 @@ func NewRouter(ctx context.Context, app *App) *gin.Engine {
 		protected.DELETE("/projects/:id", projectCtl.Delete)
 
 		protected.POST("/tasks", taskCtl.Create)
-		protected.PATCH("/projects/:pid/tasks/:id", taskCtl.Update)
+		protected.PATCH("/projects/:id/tasks/:task_id", taskCtl.Update)
 		protected.DELETE("/tasks/:id", taskCtl.Delete)
-		protected.GET("/projects/:pid/tasks/:id", taskCtl.Search)
+		protected.GET("/projects/:id/tasks/:task_id", taskCtl.Search)
 		protected.GET("/tasks", taskCtl.List)
 		
 	}
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 	taskSvc.StartDueWatcher(ctx, logger)
 	return r
 }

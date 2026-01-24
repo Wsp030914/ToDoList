@@ -4,11 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
 	"runtime/debug"
 	"strconv"
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
+)
+
+const (
+	BaseBackoff = time.Millisecond * 300
+	MaxBackoff  = time.Millisecond * 1500
+	MaxRetry    = 3
 )
 
 var lg *zap.Logger
@@ -17,13 +24,11 @@ type Job struct {
 	Type    string
 	Payload []byte
 	TraceID string
-	Retry   int
 }
 
 type TimeoutPolicy struct {
 	JobTimeout     time.Duration
 	AttemptTimeout time.Duration
-	MaxRetry       int
 }
 
 type Handler func(ctx context.Context, job Job, lg *zap.Logger) error
@@ -129,7 +134,7 @@ func (d *Dispatcher) safeHandle(ctx context.Context, job Job, worked int) (err e
 	err = d.handle(ctx, job, worked)
 	return
 }
-
+//handle 调用最终处理函数，并实现指数退避策略
 func (d *Dispatcher) handle(ctx context.Context, job Job, worked int) error {
 	h, ok := d.handlers[job.Type]
 	if !ok {
@@ -140,37 +145,39 @@ func (d *Dispatcher) handle(ctx context.Context, job Job, worked int) error {
 		zap.String("request_id", job.TraceID),
 		zap.Int("worker_id", worked),
 	)
-	attemptLg := hlg.With(zap.Int("retry", job.Retry))
 	attemptCtx, cancel := context.WithTimeout(ctx, d.Policy[job.Type].AttemptTimeout)
-	err := h(attemptCtx, job, attemptLg)
+	err := h(attemptCtx, job, hlg)
 	cancel()
-
-	for err != nil && job.Retry < d.Policy[job.Type].MaxRetry {
+	Retry := 1
+	for err != nil && Retry < MaxRetry {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		if errors.Is(err, context.Canceled) {
 			return err
 		}
-
-		backoff := 200 * time.Millisecond
+		backoff := min(MaxBackoff, BaseBackoff*time.Duration(pow(Retry)))
 		t := time.NewTimer(backoff)
 		select {
 		case <-ctx.Done():
 			t.Stop()
 			return ctx.Err()
 		case <-t.C:
-			job.Retry = job.Retry + 1
-			attemptLg = hlg.With(zap.Int("retry", job.Retry))
+			attemptLg := hlg.With(zap.Int("retry", Retry))
 			attemptCtx, cancel = context.WithTimeout(ctx, d.Policy[job.Type].AttemptTimeout)
 			err = h(attemptCtx, job, attemptLg)
 			cancel()
 		}
+		Retry++
 
 	}
 	if err != nil {
-		lg.Error(job.Type+"exceed fail", zap.Int("retry", job.Retry), zap.Error(err))
+		lg.Error(job.Type+"exceed fail", zap.Int("retry", Retry), zap.Error(err))
 		return err
 	}
 	return nil
+}
+
+func pow(n int) int {
+	return 1 << uint(n)
 }

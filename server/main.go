@@ -12,13 +12,24 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	_ "ToDoList/server/docs"
 )
 
+// @title ToDoList API
+// @version 1.0
+// @description 管理API
+// @basePath /api/v1
+// @securityDefinitions.apikey Bearer
+// @in header
+// @name Authorization
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
     defer stop()
 	utils.InitCos()
 	if err := initialize.InitMySQL(); err != nil {
+		panic(err)
+	}
+	if err := initialize.Db.AutoMigrate(&models.User{}, &models.Task{}, &models.Project{}); err != nil {
 		panic(err)
 	}
 

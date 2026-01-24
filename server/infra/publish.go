@@ -10,7 +10,7 @@ import (
 func Publish(bus *async.EventBus, lg *zap.Logger, topic string, payload any, timeout time.Duration, fields ...zap.Field) bool {
 
 	pubCtx, cancel := context.WithTimeout(context.Background(), timeout)
-	ok := bus.Publish(pubCtx, topic, payload, 0)
+	ok := bus.Publish(pubCtx, topic, payload)
 	cancel()
 
 	if !ok {

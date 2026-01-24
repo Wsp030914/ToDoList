@@ -20,13 +20,26 @@ func NewTaskHandler(svc *service.TaskService) *TaskHandler {
 }
 type CreateTaskRequest struct {
 	Title     string     `json:"title" binding:"required,max=200"`
-	ProjectID int        `json:"project_id"`
+	ProjectID int        `json:"project_id" binding:"required"`
 	ContentMD *string    `json:"content_md"`
 	Priority  *int       `json:"priority"`
 	Status    *string    `json:"status"`
 	DueAt     *time.Time `json:"due_at"`
 }
 
+// @Summary 创建任务
+// @Description 在指定项目下创建新任务
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param body body CreateTaskRequest true "任务创建请求体"
+// @Success 200 {object} TaskCreateResponse "创建成功，返回任务信息"
+// @Failure 400 {object} ErrorResponse "参数错误"
+// @Failure 401 {object} ErrorResponse "未授权或token无效"
+// @Failure 404 {object} ErrorResponse "项目不存在"
+// @Failure 409 {object} ErrorResponse "任务已存在"
+// @Failure 500 {object} ErrorResponse "系统错误"
+// @Router /tasks [post]
 func (t *TaskHandler) Create(c *gin.Context) {
 	lg := utils.CtxLogger(c)
 	uid := c.GetInt("uid")
@@ -34,7 +47,7 @@ func (t *TaskHandler) Create(c *gin.Context) {
 	var req CreateTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		lg.Warn("task.create.bind_failed", zap.Error(err))
-		utils.ReturnError(c, 4001, "请求参数错误")
+		utils.ReturnError(c, utils.ErrCodeValidation, "请求参数错误")
 		return
 	}
 
@@ -53,12 +66,12 @@ func (t *TaskHandler) Create(c *gin.Context) {
 		if errors.As(err, &ae) {
 			utils.ReturnError(c, ae.Code, ae.Message)
 		} else {
-			utils.ReturnError(c, 5001, "系统错误")
+			utils.ReturnError(c, utils.ErrCodeInternalServer, "系统错误")
 		}
 		return
 	}
-	utils.ReturnSuccess(c, 0, "创建成功", gin.H{
-		"task": created,
+	utils.ReturnSuccess(c, utils.CodeOK, "创建成功", gin.H{
+		"task": created.Task,
 	}, 1)
 }
 
@@ -72,27 +85,42 @@ type UpdateTaskRequest struct {
 	ReDueAt     *time.Time `json:"re_due_at"`
 }
 
+// @Summary 更新任务
+// @Description 更新任务的名称、内容、状态、优先级、项目和截止时间
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path integer true "项目ID"
+// @Param task_id path integer true "任务ID"
+// @Param body body UpdateTaskRequest true "任务更新请求体"
+// @Success 200 {object} TaskUpdateResponse "更新成功，返回任务信息"
+// @Failure 400 {object} ErrorResponse "参数错误"
+// @Failure 401 {object} ErrorResponse "未授权或token无效"
+// @Failure 404 {object} ErrorResponse "任务不存在或项目不存在"
+// @Failure 409 {object} ErrorResponse "任务已存在"
+// @Failure 500 {object} ErrorResponse "系统错误"
+// @Router /projects/{id}/tasks/{task_id} [patch]
 func (t *TaskHandler) Update(c *gin.Context) {
 	lg := utils.CtxLogger(c)
 	uid := c.GetInt("uid")
-	idStr := c.Param("id")
-	pidStr := c.Param("pid")
-	id, err := strconv.Atoi(idStr)
+	taskIDStr := c.Param("task_id")
+	pidStr := c.Param("id")
+	id, err := strconv.Atoi(taskIDStr)
 	if err != nil || id <= 0 {
-		lg.Warn("task.update.invalid_id", zap.String("id", idStr), zap.Error(err))
-		utils.ReturnError(c, 4001, "非法的任务ID")
+		lg.Warn("task.update.invalid_id", zap.String("id", taskIDStr), zap.Error(err))
+		utils.ReturnError(c, utils.ErrCodeValidation, "非法的任务ID")
 		return
 	}
 	pid, err := strconv.Atoi(pidStr)
 	if err != nil || pid <= 0 {
 		lg.Warn("task.update.invalid_pid", zap.String("pid", pidStr), zap.Error(err))
-		utils.ReturnError(c, 4001, "非法的项目ID")
+		utils.ReturnError(c, utils.ErrCodeValidation, "非法的项目ID")
 		return
 	}
 	var req UpdateTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		lg.Warn("task.update.bind_failed", zap.Error(err))
-		utils.ReturnError(c, 4001, "请求参数错误")
+		utils.ReturnError(c, utils.ErrCodeValidation, "请求参数错误")
 		return
 	}
 	in := service.UpdateTaskInput{
@@ -104,16 +132,38 @@ func (t *TaskHandler) Update(c *gin.Context) {
 		ReDueAt:   req.ReDueAt,
 	}
 	updated, err := t.svc.Update(c.Request.Context(), lg, uid, pid, id, in)
+	if err != nil {
+		var ae *service.AppError
+		if errors.As(err, &ae) {
+			utils.ReturnError(c, ae.Code, ae.Message)
+		} else {
+			utils.ReturnError(c, utils.ErrCodeInternalServer, "系统错误")
+		}
+		return
+	}
 
 	if updated.Affected == 0 {
 		lg.Info("task.update.no_rows_affected", zap.Int("task_id", id))
-		utils.ReturnSuccess(c, 0, "未修改任何字段", updated.Task, updated.Affected)
+		utils.ReturnSuccess(c, utils.CodeOK, "未修改任何字段", updated.Task, updated.Affected)
 		return
 	}
 	lg.Info("task.update.success", zap.Int("task_id", id), zap.Int64("affected", updated.Affected))
-	utils.ReturnSuccess(c, 0, "任务更新成功", updated.Task, updated.Affected)
+	utils.ReturnSuccess(c, utils.CodeOK, "任务更新成功", updated.Task, updated.Affected)
 }
 
+// @Summary 删除任务
+// @Description 删除指定项目下的任务
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path integer true "任务ID"
+// @Param project_id query integer true "项目ID"
+// @Success 200 {object} TaskDeleteResponse "删除成功，返回任务ID和受影响的行数"
+// @Failure 400 {object} ErrorResponse "参数错误"
+// @Failure 401 {object} ErrorResponse "未授权或token无效"
+// @Failure 404 {object} ErrorResponse "任务不存在或项目不存在"
+// @Failure 500 {object} ErrorResponse "系统错误"
+// @Router /tasks/{id} [delete]
 func (t *TaskHandler) Delete(c *gin.Context) {
 	lg := utils.CtxLogger(c)
 	idStr := c.Param("id")
@@ -121,14 +171,14 @@ func (t *TaskHandler) Delete(c *gin.Context) {
 	id, err := strconv.Atoi(idStr)
 	if err != nil || id <= 0 {
 		lg.Warn("task.delete.invalid_id", zap.String("id", idStr), zap.Error(err))
-		utils.ReturnError(c, 4001, "非法的任务ID")
+		utils.ReturnError(c, utils.ErrCodeValidation, "非法的任务ID")
 		return
 	}
 	pidStr := strings.TrimSpace(c.Query("project_id"))
 	pid, err := strconv.Atoi(pidStr)
 	if err != nil || pid <= 0 {
 		lg.Warn("task.delete.project_id_invalid", zap.String("project_id", pidStr), zap.Error(err))
-		utils.ReturnError(c, 4001, "非法的项目ID")
+		utils.ReturnError(c, utils.ErrCodeValidation, "非法的项目ID")
 		return
 	}
 	affected, err := t.svc.Delete(c.Request.Context(), lg, uid, pid, id)
@@ -137,31 +187,44 @@ func (t *TaskHandler) Delete(c *gin.Context) {
 		if errors.As(err, &ae) {
 			utils.ReturnError(c, ae.Code, ae.Message)
 		} else {
-			utils.ReturnError(c, 5001, "系统错误")
+			utils.ReturnError(c, utils.ErrCodeInternalServer, "系统错误")
 		}
 		return
 	}
-	utils.ReturnSuccess(c, 0, "删除成功", gin.H{
+	utils.ReturnSuccess(c, utils.CodeOK, "删除成功", gin.H{
 		"id":            id,
 		"task_affected": affected,
 	}, 1)
 }
 
+// @Summary 获取任务详情
+// @Description 根据项目ID和任务ID获取任务详情
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path integer true "项目ID"
+// @Param task_id path integer true "任务ID"
+// @Success 200 {object} TaskDetailResponse "获取成功，返回任务详情"
+// @Failure 400 {object} ErrorResponse "参数错误"
+// @Failure 401 {object} ErrorResponse "未授权或token无效"
+// @Failure 404 {object} ErrorResponse "任务不存在或项目不存在"
+// @Failure 500 {object} ErrorResponse "系统错误"
+// @Router /projects/{id}/tasks/{task_id} [get]
 func (t *TaskHandler) Search(c *gin.Context) {
 	lg := utils.CtxLogger(c)
 	uid := c.GetInt("uid")
-	idStr := c.Param("id")
-	pidStr := c.Param("pid")
-	id, err := strconv.Atoi(idStr)
+	taskIDStr := c.Param("task_id")
+	pidStr := c.Param("id")
+	id, err := strconv.Atoi(taskIDStr)
 	if err != nil || id == 0 {
-		lg.Warn("task.search.invalid_id", zap.String("id", idStr), zap.Error(err))
-		utils.ReturnError(c, 4001, "非法的任务ID")
+		lg.Warn("task.search.invalid_id", zap.String("id", taskIDStr), zap.Error(err))
+		utils.ReturnError(c, utils.ErrCodeValidation, "非法的任务ID")
 		return
 	}
 	pid, err := strconv.Atoi(pidStr)
-	if err != nil || id <= 0 {
+	if err != nil || pid <= 0 {
 		lg.Warn("task.search.invalid_pid", zap.String("pid", pidStr), zap.Error(err))
-		utils.ReturnError(c, 4001, "非法的项目ID")
+		utils.ReturnError(c, utils.ErrCodeValidation, "非法的项目ID")
 		return
 	}
 	task, err := t.svc.Search(c.Request.Context(), lg, id, uid, pid)
@@ -170,14 +233,29 @@ func (t *TaskHandler) Search(c *gin.Context) {
 		if errors.As(err, &ae) {
 			utils.ReturnError(c, ae.Code, ae.Message)
 		} else {
-			utils.ReturnError(c, 5001, "系统错误")
+			utils.ReturnError(c, utils.ErrCodeInternalServer, "系统错误")
 		}
 		return
 	}
 	lg.Info("task.search.success", zap.Int("task_id", task.ID))
-	utils.ReturnSuccess(c, 0, "查找成功", task, 1)
+	utils.ReturnSuccess(c, utils.CodeOK, "查找成功", task, 1)
 }
 
+// @Summary 获取任务列表
+// @Description 获取指定项目下的任务列表，支持状态筛选和分页
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param project_id query integer true "项目ID"
+// @Param status query string false "任务状态（todo/done）"
+// @Param page query integer false "页码（默认1）"
+// @Param page_size query integer false "每页数量（默认20，最大100）"
+// @Success 200 {object} TaskListResponse "获取成功，返回任务列表"
+// @Failure 400 {object} ErrorResponse "参数错误"
+// @Failure 401 {object} ErrorResponse "未授权或token无效"
+// @Failure 404 {object} ErrorResponse "项目不存在"
+// @Failure 500 {object} ErrorResponse "系统错误"
+// @Router /tasks [get]
 func (t *TaskHandler) List(c *gin.Context) {
 	lg := utils.CtxLogger(c)
 	uid := c.GetInt("uid")
@@ -189,7 +267,7 @@ func (t *TaskHandler) List(c *gin.Context) {
 	pid, err := strconv.Atoi(pidStr)
 	if err != nil || pid <= 0 {
 		lg.Warn("task.list.project_id_invalid", zap.String("project_id", pidStr), zap.Error(err))
-		utils.ReturnError(c, 4001, "非法的项目ID")
+		utils.ReturnError(c, utils.ErrCodeValidation, "非法的项目ID")
 		return
 	}
 	in := service.TaskListInput{
@@ -205,12 +283,12 @@ func (t *TaskHandler) List(c *gin.Context) {
 		if errors.As(err, &ae) {
 			utils.ReturnError(c, ae.Code, ae.Message)
 		} else {
-			utils.ReturnError(c, 5001, "系统错误")
+			utils.ReturnError(c, utils.ErrCodeInternalServer, "系统错误")
 		}
 		return
 	}
 	lg.Info("task.list.success", zap.Int("count", len(res.Tasks)), zap.Int64("total", res.Total))
-	utils.ReturnSuccess(c, 0, "获取成功", gin.H{
+	utils.ReturnSuccess(c, utils.CodeOK, "获取成功", gin.H{
 		"list":      res.Tasks,
 		"page":      page,
 		"page_size": size,

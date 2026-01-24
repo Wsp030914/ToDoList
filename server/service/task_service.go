@@ -67,34 +67,34 @@ func (t *TaskService) Create(ctx context.Context, lg *zap.Logger, uid int, in Cr
 	in.Title = strings.TrimSpace(in.Title)
 	if in.Title == "" {
 		lg.Warn("task.create.title_empty")
-		return nil, &AppError{Code: 4001, Message: "请输入任务名称"}
+		return nil, &AppError{Code: utils.ErrCodeValidation, Message: "请输入任务名称"}
 	}
 	if in.Priority != nil && (*in.Priority < 1 || *in.Priority > 5) {
 		lg.Warn("task.create.priority_range_invalid", zap.Int("priority", *in.Priority))
-		return nil, &AppError{Code: 4001, Message: "优先级范围应为 1~5"}
+		return nil, &AppError{Code: utils.ErrCodeValidation, Message: "优先级范围应为 1~5"}
 	}
 
 	if in.StartAt != nil && in.DueAt != nil && (*in.DueAt).Before(*in.StartAt) {
 		lg.Warn("task.create.time_order_invalid", zap.Timep("start_at", in.StartAt), zap.Timep("due_at", in.DueAt))
-		return nil, &AppError{Code: 4001, Message: "截止时间不能早于开始时间"}
+		return nil, &AppError{Code: utils.ErrCodeValidation, Message: "截止时间不能早于开始时间"}
 	}
 	_, err := models.GetProjectByID(uid, in.ProjectID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			lg.Warn("task.create.project_id_invalid", zap.Int("project_id", in.ProjectID))
-			return nil, &AppError{Code: 4001, Message: "项目不存在"}
+			return nil, &AppError{Code: utils.ErrCodeNotFound, Message: "项目不存在"}
 		}
 		lg.Error("task.create.project_query_failed", zap.Error(err))
-		return nil, &AppError{Code: 4001, Message: "请稍后重试"}
+		return nil, &AppError{Code: utils.ErrCodeInternalServer, Message: "请稍后重试"}
 	}
 	exists, err := models.GetTaskByUserProjectTitle(uid, in.ProjectID, in.Title)
 	if err != nil {
 		lg.Error("task.create.check_unique_failed", zap.Error(err))
-		return nil, &AppError{Code: 4001, Message: "请稍后重试"}
+		return nil, &AppError{Code: utils.ErrCodeInternalServer, Message: "请稍后重试"}
 	}
 	if exists.ID != 0 {
 		lg.Info("task.create.duplicate", zap.Int("exists_id", exists.ID))
-		return nil, &AppError{Code: 4001, Message: "该任务已存在"}
+		return nil, &AppError{Code: utils.ErrCodeConflict, Message: "该任务已存在"}
 	}
 
 	status := "todo"
@@ -102,7 +102,7 @@ func (t *TaskService) Create(ctx context.Context, lg *zap.Logger, uid int, in Cr
 		s := strings.TrimSpace(*in.Status)
 		if s != "todo" && s != "done" {
 			lg.Warn("task.create.status_invalid", zap.String("status", s))
-			return nil, &AppError{Code: 4001, Message: "任务状态错误"}
+			return nil, &AppError{Code: utils.ErrCodeValidation, Message: "任务状态错误"}
 		}
 		status = s
 	}
@@ -117,7 +117,7 @@ func (t *TaskService) Create(ctx context.Context, lg *zap.Logger, uid int, in Cr
 	contentHtml := ""
 	if contentHtml, err = utils.RenderSafeHTML([]byte(contented)); err != nil {
 		lg.Warn("task.create.md_render_failed", zap.Error(err))
-		return nil, &AppError{Code: 4001, Message: "markdown内容出错"}
+		return nil, &AppError{Code: utils.ErrCodeValidation, Message: "markdown内容出错"}
 	}
 	task := models.Task{
 		UserID:      uid,
@@ -133,10 +133,10 @@ func (t *TaskService) Create(ctx context.Context, lg *zap.Logger, uid int, in Cr
 	if err != nil {
 		if errors.Is(err, models.ErrTaskExists) {
 			lg.Info("task.create.duplicate_on_insert")
-			return nil, &AppError{Code: 4001, Message: "该任务已存在"}
+			return nil, &AppError{Code: utils.ErrCodeConflict, Message: "该任务已存在"}
 		}
 		lg.Error("task.create.insert_failed", zap.Error(err))
-		return nil, &AppError{Code: 4001, Message: "创建失败，请稍后重试"}
+		return nil, &AppError{Code: utils.ErrCodeInternalServer, Message: "创建失败，请稍后重试"}
 	}
 	return &CreateTaskResult{Task: created}, nil
 }
@@ -160,10 +160,10 @@ func (t *TaskService) Update(ctx context.Context, lg *zap.Logger, uid, pid int, 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			lg.Info("task.update.not_found", zap.Int("task_id", id))
-			return nil, &AppError{Code: 4001, Message: "任务不存在"}
+			return nil, &AppError{Code: utils.ErrCodeNotFound, Message: "任务不存在"}
 		}
 		lg.Error("task.update.query_failed", zap.Error(err))
-		return nil, &AppError{Code: 4001, Message: "请稍后重试"}
+		return nil, &AppError{Code: utils.ErrCodeInternalServer, Message: "请稍后重试"}
 	}
 
 	update := map[string]interface{}{}
@@ -171,7 +171,7 @@ func (t *TaskService) Update(ctx context.Context, lg *zap.Logger, uid, pid int, 
 		title := strings.TrimSpace(*in.Title)
 		if title == "" {
 			lg.Warn("task.update.title_empty")
-			return nil, &AppError{Code: 4001, Message: "任务名称不能为空"}
+			return nil, &AppError{Code: utils.ErrCodeValidation, Message: "任务名称不能为空"}
 		}
 		update["title"] = title
 	}
@@ -181,7 +181,7 @@ func (t *TaskService) Update(ctx context.Context, lg *zap.Logger, uid, pid int, 
 		contentHtml := ""
 		if contentHtml, err = utils.RenderSafeHTML([]byte(*in.ContentMD)); err != nil {
 			lg.Warn("task.update.md_render_failed", zap.Error(err))
-			return nil, &AppError{Code: 4001, Message: "markdown内容出错"}
+			return nil, &AppError{Code: utils.ErrCodeValidation, Message: "markdown内容出错"}
 		}
 		update["content_html"] = contentHtml
 	}
@@ -189,7 +189,7 @@ func (t *TaskService) Update(ctx context.Context, lg *zap.Logger, uid, pid int, 
 	if in.Priority != nil {
 		if *in.Priority < 1 || *in.Priority > 5 {
 			lg.Warn("task.update.priority_invalid", zap.Int("priority", *in.Priority))
-			return nil, &AppError{Code: 4001, Message: "优先级范围应为 1~5"}
+			return nil, &AppError{Code: utils.ErrCodeValidation, Message: "优先级范围应为 1~5"}
 		}
 		update["priority"] = *in.Priority
 	}
@@ -198,7 +198,7 @@ func (t *TaskService) Update(ctx context.Context, lg *zap.Logger, uid, pid int, 
 		s := strings.TrimSpace(*in.Status)
 		if s != "todo" && s != "done" {
 			lg.Warn("task.update.status_invalid", zap.String("status", s))
-			return nil, &AppError{Code: 4001, Message: "任务状态错误"}
+			return nil, &AppError{Code: utils.ErrCodeValidation, Message: "任务状态错误"}
 		}
 		update["status"] = s
 	}
@@ -209,38 +209,38 @@ func (t *TaskService) Update(ctx context.Context, lg *zap.Logger, uid, pid int, 
 	if in.ReDueAt != nil {
 		if in.ReDueAt.Before(time.Now()) {
 			lg.Warn("task.update.time_order_invalid", zap.Any("DueAt", *in.ReDueAt))
-			return nil, &AppError{Code: 4001, Message: "截止时间不能早于开始时间"}
+			return nil, &AppError{Code: utils.ErrCodeValidation, Message: "截止时间不能早于开始时间"}
 		}
 		update["due_at"] = *in.ReDueAt
 	}
 	if in.ProjectID != nil {
 		if *in.ProjectID <= 0 {
 			lg.Warn("task.update.project_id_invalid", zap.Int("re_project_id", *in.ProjectID))
-			return nil, &AppError{Code: 4001, Message: "项目号不合法"}
+			return nil, &AppError{Code: utils.ErrCodeValidation, Message: "项目号不合法"}
 		}
 		if _, err := models.GetProjectByID(uid, *in.ProjectID); err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				lg.Info("task.update.project_not_found", zap.Int("re_project_id", *in.ProjectID))
-				return nil, &AppError{Code: 4001, Message: "项目不存在"}
+				return nil, &AppError{Code: utils.ErrCodeNotFound, Message: "项目不存在"}
 			}
 			lg.Error("task.update.project_query_failed", zap.Error(err))
-			return nil, &AppError{Code: 4001, Message: "请稍后重试"}
+			return nil, &AppError{Code: utils.ErrCodeInternalServer, Message: "请稍后重试"}
 		}
 		update["project_id"] = *in.ProjectID
 	}
 	if len(update) == 0 {
 		lg.Info("task.update.noop")
-		return nil, &AppError{Code: 4001, Message: "没有需要更新的字段"}
+		return nil, &AppError{Code: utils.ErrCodeValidation, Message: "没有需要更新的字段"}
 	}
 
 	updated, affected, err := models.UpdateTaskByIDAndUID(update, id, uid)
 	if err != nil {
 		if errors.Is(err, models.ErrTaskExists) {
 			lg.Info("task.update.duplicate_on_update")
-			return nil, &AppError{Code: 4001, Message: "任务已存在"}
+			return nil, &AppError{Code: utils.ErrCodeConflict, Message: "任务已存在"}
 		}
 		lg.Error("task.update.update_failed", zap.Error(err))
-		return nil, &AppError{Code: 4001, Message: "更新失败，请稍后重试"}
+		return nil, &AppError{Code: utils.ErrCodeInternalServer, Message: "更新失败，请稍后重试"}
 	}
 
 	err = DelTaskDetailCache(ctx, uid, id)
@@ -266,10 +266,10 @@ func (t *TaskService) Delete(ctx context.Context, lg *zap.Logger, uid int, pid i
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			lg.Info("task.delete.not_found", zap.Int("task_id", id))
-			return 0, &AppError{Code: 4001, Message: "任务不存在或已删除"}
+			return 0, &AppError{Code: utils.ErrCodeNotFound, Message: "任务不存在或已删除"}
 		}
 		lg.Error("task.delete.failed", zap.Error(err))
-		return 0, &AppError{Code: 4001, Message: "删除失败请稍后重试"}
+		return 0, &AppError{Code: utils.ErrCodeInternalServer, Message: "删除失败请稍后重试"}
 	}
 	err = DelTaskDetailCache(ctx, uid, id)
 	if err != nil {
@@ -295,10 +295,10 @@ func (t *TaskService) Search(ctx context.Context, lg *zap.Logger, id, uid, pid i
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			lg.Info("task.search.not_found", zap.Int("task_id", id))
-			return nil, &AppError{Code: 4001, Message: "任务不存在"}
+			return nil, &AppError{Code: utils.ErrCodeNotFound, Message: "任务不存在"}
 		}
 		lg.Error("task.search.query_failed", zap.Error(err))
-		return nil, &AppError{Code: 4001, Message: "任务不存在"}
+		return nil, &AppError{Code: utils.ErrCodeInternalServer, Message: "请稍后重试"}
 	}
 	//回填redis
 	td = &TaskDetail{
@@ -342,7 +342,7 @@ func (t *TaskService) List(ctx context.Context, lg *zap.Logger, uid int, in Task
 	//降级查询mysql
 	if in.Status != "todo" && in.Status != "done" && in.Status != "" {
 		lg.Warn("task.list.status_invalid", zap.String("status", in.Status))
-		return nil, &AppError{Code: 4001, Message: "任务状态错误"}
+		return nil, &AppError{Code: utils.ErrCodeValidation, Message: "任务状态错误"}
 	}
 	if in.Page < 1 {
 		in.Page = 1
@@ -355,16 +355,16 @@ func (t *TaskService) List(ctx context.Context, lg *zap.Logger, uid int, in Task
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			lg.Info("task.list.project_not_found", zap.Int("project_id", in.Pid))
-			return nil, &AppError{Code: 4001, Message: "项目不存在"}
+			return nil, &AppError{Code: utils.ErrCodeNotFound, Message: "项目不存在"}
 		}
 		lg.Error("task.list.project_query_failed", zap.Error(err))
-		return nil, &AppError{Code: 4001, Message: "请稍后重试"}
+		return nil, &AppError{Code: utils.ErrCodeInternalServer, Message: "请稍后重试"}
 	}
 
 	tasks, total, err := models.TaskListAll(uid, in.Pid, in.Status)
 	if err != nil {
 		lg.Error("task.list.query_failed", zap.Error(err))
-		return nil, &AppError{Code: 4001, Message: "获取任务列表信息出错"}
+		return nil, &AppError{Code: utils.ErrCodeInternalServer, Message: "获取任务列表信息出错"}
 	}
 
 	res := make([]TaskSummary, len(tasks))
@@ -380,7 +380,7 @@ func (t *TaskService) List(ctx context.Context, lg *zap.Logger, uid int, in Task
 	ts, total, err := PageTaskSummaries(res, in.Page, in.Size)
 	if err != nil {
 		lg.Error("task.list.page_failed", zap.Error(err))
-		return nil, &AppError{Code: 4001, Message: "获取任务列表信息出错"}
+		return nil, &AppError{Code: utils.ErrCodeInternalServer, Message: "获取任务列表信息出错"}
 	}
 
 	err = SetTaskSummaryCache(ctx, uid, in.Pid, in.Status, total, res)

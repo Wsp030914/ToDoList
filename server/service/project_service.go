@@ -4,6 +4,7 @@ import (
 	"ToDoList/server/async"
 	"ToDoList/server/infra"
 	"ToDoList/server/models"
+	"ToDoList/server/utils"
 	"context"
 	"errors"
 	"regexp"
@@ -45,25 +46,23 @@ func NewProjectService(bus *async.EventBus) *ProjectService {
 }
 
 func (p *ProjectService) GetProjectByID(ctx context.Context, lg *zap.Logger, uid int, idStr string) (*ProjectProfile, error) {
-	lg = lg.With(zap.Int("uid", uid), zap.String("id_str", idStr))
 	lg.Info("project.GetProjectByID.begin")
-
 	id, err := strconv.Atoi(idStr)
-	if err != nil || id == 0 {
-		lg.Warn("invalid project id")
-		return nil, &AppError{Code: 4001, Message: "非法项目id"}
+	if err != nil || id <= 0 {
+		lg.Warn("project.GetProjectByID.invalid_project_id")
+		return nil, &AppError{Code: utils.ErrCodeValidation, Message: "非法项目id"}
 	}
 
 	project, err := models.GetProjectInfoByIDAndUserID(ctx, id, uid)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			lg.Info("project not found", zap.Int("project_id", id))
-			return nil, &AppError{Code: 4001, Message: "项目不存在"}
+			lg.Info("project.GetProjectByID.project_not_found", zap.Int("project_id", id))
+			return nil, &AppError{Code: utils.ErrCodeNotFound, Message: "项目不存在"}
 		}
-		lg.Error("query project failed", zap.Error(err))
-		return nil, &AppError{Code: 5001, Message: "请稍后重试"}
+		lg.Error("project.GetProjectByID.query_project_failed", zap.Error(err))
+		return nil, &AppError{Code: utils.ErrCodeInternalServer, Message: "请稍后重试"}
 	}
-	lg.Info("project.GetProjectByID.success", zap.Int("project_id", project.ID))
+	lg.Info("project.GetProjectByID.success")
 	return &ProjectProfile{
 		ID:        project.ID,
 		Name:      project.Name,
@@ -75,10 +74,10 @@ func (p *ProjectService) GetProjectByID(ctx context.Context, lg *zap.Logger, uid
 	}, nil
 }
 
-func (p *ProjectService) GetProjectListByName(ctx context.Context, lg *zap.Logger, uid int, name string, page int, size int) ([]ProjectSummary, int64, error) {
+func (p *ProjectService) SearchProjectListByName(ctx context.Context, lg *zap.Logger, uid int, name string, page int, size int) ([]ProjectSummary, int64, error) {
 	var res []ProjectSummary
-	lg = lg.With(zap.Int("uid", uid), zap.String("name", name))
-	lg.Info("project.GetProjectListByName.begin")
+
+	lg.Info("project.SearchProjectListByName.begin")
 
 	useCache := !ShouldBypassProjectsCache(ctx, uid)
 	var ver int64
@@ -87,15 +86,15 @@ func (p *ProjectService) GetProjectListByName(ctx context.Context, lg *zap.Logge
 
 		items, total, redErr := GetProjectsSummaryCache(ctx, uid, name, page, size, ver)
 		if redErr == nil {
-			lg.Info("project.GetProjectListByName.cache_hit", zap.Int64("total", total))
+			lg.Info("project.SearchProjectListByName.cache_hit", zap.Int64("total", total))
 			return items, total, nil
 		}
 	}
 
 	Projects, total, err := models.GetProjectListByUserIDAndName(ctx, uid, name, page, size)
 	if err != nil {
-		lg.Error("GetProjectListByName projects failed", zap.Error(err))
-		return nil, 0, &AppError{Code: 5001, Message: "获取项目列表信息出错"}
+		lg.Error("project.SearchProjectListByName.projects_failed", zap.Error(err))
+		return nil, 0, &AppError{Code: utils.ErrCodeInternalServer, Message: "获取项目列表信息出错"}
 	}
 
 	res = make([]ProjectSummary, len(Projects))
@@ -119,7 +118,7 @@ func (p *ProjectService) GetProjectListByName(ctx context.Context, lg *zap.Logge
 			Size  int              `json:"size"`
 		}{Items: res, Total: total, UID: uid, Ver: ver, Name: name, Page: page, Size: size}, 100*time.Millisecond)
 	}
-
+	lg.Info("project.SearchProjectListByName.success")
 	return res, total, nil
 }
 
@@ -129,14 +128,13 @@ type CreatePeojectResult struct {
 }
 
 func (p *ProjectService) CreateProject(ctx context.Context, lg *zap.Logger, uid int, name string, color *string) (*CreatePeojectResult, error) {
-	lg = lg.With(zap.Int("uid", uid), zap.String("name", name))
 	lg.Info("project.CreateProject.begin")
 	var project models.Project
 	if color != nil {
 		err := validateColorIfProvided(color)
 		if err != nil{
 			lg.Info("CreateProject.Color_is_Error")
-			return nil, &AppError{Code: 4001, Message: "项目颜色格式出错"}
+			return nil, &AppError{Code: utils.ErrCodeValidation, Message: "项目颜色格式出错"}
 		}
 		cl := *color
 		project = models.Project{Name: name, UserID: uid, Color: cl}
@@ -147,10 +145,10 @@ func (p *ProjectService) CreateProject(ctx context.Context, lg *zap.Logger, uid 
 	if err != nil {
 		if errors.Is(err, models.ErrProjectExists) {
 			lg.Info("CreateProject.duplicate_on_insert")
-			return nil, &AppError{Code: 4001, Message: "该项目已存在"}
+			return nil, &AppError{Code: utils.ErrCodeConflict, Message: "该项目已存在"}
 		}
 		lg.Error("CreateProject_failed", zap.Error(err))
-		return nil, &AppError{Code: 5001, Message: "保存失败，请联系管理员"}
+		return nil, &AppError{Code: utils.ErrCodeInternalServer, Message: "保存失败，请联系管理员"}
 	}
 	err = IncrProjectsVer(ctx, c.Rdb, uid)
 	if err != nil {
@@ -183,34 +181,34 @@ func (p *ProjectService) UpdateProject(ctx context.Context, lg *zap.Logger, pid 
 		err := validateColorIfProvided(in.Color)
 		if err != nil{
 			lg.Info("CreateProject.Color_is_Error")
-			return nil, &AppError{Code: 4001, Message: "项目颜色格式出错"}
+			return nil, &AppError{Code: utils.ErrCodeValidation, Message: "项目颜色格式出错"}
 		}
 		Color := *(in.Color)
 		update["color"] = Color
 	}
 	if in.SortOrder != nil {
 		if *in.SortOrder < 0 {
-			return nil, &AppError{Code: 4001, Message: "sort_order 不能小于 0"}
+			return nil, &AppError{Code: utils.ErrCodeValidation, Message: "sort_order 不能小于 0"}
 		}
 		update["sort_order"] = *in.SortOrder
 	}
 	if len(update) == 0 {
-		lg.Info("project.no fields to update")
-		return nil, &AppError{Code: 4001, Message: "没有需要更新的字段"}
+		lg.Info("project.no_fields_to_update")
+		return nil, &AppError{Code: utils.ErrCodeValidation, Message: "没有需要更新的字段"}
 	}
 
 	updated, affected, err := models.UpdateProjectByIDAndUserID(ctx, update, pid, uid)
 	if err != nil {
 		if errors.Is(err, models.ErrProjectExists) {
 			lg.Info("project.UpdateProject.duplicate_name", zap.Int("project_id", pid))
-			return nil, &AppError{Code: 4001, Message: "该项目已存在"}
+			return nil, &AppError{Code: utils.ErrCodeConflict, Message: "该项目已存在"}
 		}
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			lg.Info("project.UpdateProject.not_found", zap.Int("project_id", pid))
-			return nil, &AppError{Code: 4004, Message: "项目不存在或无权限"}
+			return nil, &AppError{Code: utils.ErrCodeNotFound, Message: "项目不存在或无权限"}
 		}
 		lg.Error("project.UpdateProject.db_failed", zap.Int("project_id", pid), zap.Error(err))
-		return nil, &AppError{Code: 5001, Message: "保存失败，请联系管理员"}
+		return nil, &AppError{Code: utils.ErrCodeInternalServer, Message: "保存失败，请联系管理员"}
 	}
 	if affected == 0 {
 		lg.Info("Project.update.noop")
@@ -240,10 +238,10 @@ func (p *ProjectService) DeleteProject(ctx context.Context, lg *zap.Logger, pid 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			lg.Info("project not found or already deleted", zap.Int("project_id", pid))
-			return nil, &AppError{Code: 4001, Message: "项目不存在或已删除"}
+			return nil, &AppError{Code: utils.ErrCodeNotFound, Message: "项目不存在或已删除"}
 		}
 		lg.Error("delete project failed", zap.Error(err))
-		return nil, &AppError{Code: 5001, Message: "删除失败"}
+		return nil, &AppError{Code: utils.ErrCodeInternalServer, Message: "删除失败"}
 	}
 	IncrProjectsVer(ctx, c.Rdb, uid)
 	lg.Info("project.delete.ok",

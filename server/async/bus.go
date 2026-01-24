@@ -14,7 +14,7 @@ func NewEventBus(d *Dispatcher) *EventBus {
 	return &EventBus{d: d}
 }
 
-func (b *EventBus) Publish(ctx context.Context, jobType string, payload any, retry int) bool {
+func (b *EventBus) Publish(ctx context.Context, jobType string, payload any) bool {
 	if ctx != nil {
 		select {
 		case <-ctx.Done():
@@ -33,7 +33,6 @@ func (b *EventBus) Publish(ctx context.Context, jobType string, payload any, ret
 		Type:    jobType,
 		Payload: bs,
 		TraceID: reqID,
-		Retry:   retry,
 	}
 	return b.d.Enqueue(j)
 }
